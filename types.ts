@@ -1,5 +1,10 @@
+
+export type Gender = 'Male' | 'Female' | 'Non-Binary' | 'Prefer not to say';
+
 export interface UserProfile {
   name: string;
+  gender?: Gender;
+  dob?: string; // YYYY-MM-DD
   selfieUrl: string | null;
   isOnboarded: boolean;
   hasSetSchedule: boolean; // To track if user has defined their timing
@@ -43,4 +48,10 @@ export interface AffirmationState {
   type: 'MORNING' | 'EVENING';
   lastGenerated: string | null;
   isAcknowledged: boolean; // Specific to the current session/type
+}
+
+export interface GratitudeEntry {
+  id: string;
+  text: string;
+  createdAt: number;
 }

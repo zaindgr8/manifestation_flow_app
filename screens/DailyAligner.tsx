@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
-import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Calendar as CalendarIcon, Flame, CheckCircle2, Plus, Edit2, Trash2, Save } from 'lucide-react';
+import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Calendar as CalendarIcon, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles } from 'lucide-react';
 import { Button } from '../components/Button';
 
 export const DailyAligner: React.FC = () => {
-  const { user, rituals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, updateRitualTitle } = useManifest();
+  const { user, rituals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, updateRitualTitle, gratitudeEntries, addGratitude } = useManifest();
   const [showConfetti, setShowConfetti] = useState(false);
   const [loadingAffirmation, setLoadingAffirmation] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -16,6 +16,9 @@ export const DailyAligner: React.FC = () => {
   // Edit Ritual State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+
+  // Gratitude State
+  const [gratitudeInput, setGratitudeInput] = useState('');
 
   // Settings State
   const [morningTime, setMorningTime] = useState(user.reminderTimes?.morning || '08:00');
@@ -81,6 +84,13 @@ export const DailyAligner: React.FC = () => {
     }
   };
 
+  const handleAddGratitude = () => {
+    if (gratitudeInput.trim()) {
+        addGratitude(gratitudeInput.trim());
+        setGratitudeInput('');
+    }
+  };
+
   const startEditing = (id: string, currentTitle: string) => {
     setEditingId(id);
     setEditingTitle(currentTitle);
@@ -93,6 +103,13 @@ export const DailyAligner: React.FC = () => {
       setEditingTitle('');
     }
   };
+
+  // Filter todays gratitude
+  const todaysGratitude = gratitudeEntries.filter(g => {
+    const d = new Date(g.createdAt);
+    const today = new Date();
+    return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+  });
 
   return (
     <div className="min-h-screen bg-void pb-24 px-6 pt-16 relative overflow-x-hidden">
@@ -188,6 +205,48 @@ export const DailyAligner: React.FC = () => {
          >
             <Settings size={20} />
          </button>
+      </div>
+
+      {/* Gratitude Frequency Tuner */}
+      <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+             <Heart size={16} className="text-gold" />
+             <h2 className="text-sm font-serif text-white">Frequency Tuner</h2>
+          </div>
+          <div className="bg-surface/50 border border-white/5 rounded-2xl p-4">
+             {todaysGratitude.length < 3 ? (
+                <div className="flex gap-2">
+                    <input 
+                       type="text"
+                       value={gratitudeInput}
+                       onChange={(e) => setGratitudeInput(e.target.value)}
+                       onKeyDown={(e) => e.key === 'Enter' && handleAddGratitude()}
+                       placeholder={`I am grateful for... (${3 - todaysGratitude.length} remaining)`}
+                       className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none"
+                    />
+                    <button onClick={handleAddGratitude} disabled={!gratitudeInput.trim()} className="text-gold disabled:opacity-30">
+                        <Plus size={18} />
+                    </button>
+                </div>
+             ) : (
+                <div className="text-center py-1">
+                    <p className="text-xs text-gold tracking-widest uppercase flex items-center justify-center gap-2">
+                        <Sparkles size={12} /> Frequency Raised
+                    </p>
+                </div>
+             )}
+             
+             {todaysGratitude.length > 0 && (
+                 <div className="mt-3 space-y-2">
+                     {todaysGratitude.map((g) => (
+                         <div key={g.id} className="text-xs text-gray-400 flex items-center gap-2 animate-fade-in">
+                             <div className="w-1 h-1 rounded-full bg-gold"></div>
+                             {g.text}
+                         </div>
+                     ))}
+                 </div>
+             )}
+          </div>
       </div>
 
       {/* Affirmation Card */}

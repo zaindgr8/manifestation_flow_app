@@ -1,24 +1,58 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
-import { Plus, GripHorizontal, CalendarDays, Loader2, RefreshCw, Upload, X, Camera, Sparkles } from 'lucide-react';
+import { Plus, GripHorizontal, CalendarDays, Loader2, RefreshCw, Upload, X, Camera, Sparkles, Play, Pause, RotateCcw } from 'lucide-react';
 import { Button } from '../components/Button';
+import { Gender } from '../types';
 
-// Curated Category Placeholders (High Quality Unsplash)
-const CATEGORY_PLACEHOLDERS: Record<string, string> = {
-  'Travel & Adventure': 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80',
-  'Business & Career': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80',
-  'Love & Relation': 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800&q=80',
-  'Health & Beauty': 'https://images.unsplash.com/photo-1544367563-12123d896889?w=800&q=80',
-  'Dream Car': 'https://images.unsplash.com/photo-1503376763036-066120622c74?w=800&q=80',
-  'Dream Home': 'https://images.unsplash.com/photo-1600596542815-2495db9dc2c3?w=800&q=80',
-  'Default': 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80' // Mystic Abstract
+// Gender-Specific Placeholders
+// Fallback: Default/Abstract
+const PLACEHOLDER_DB: Record<string, { Male: string; Female: string; Default: string }> = {
+  'Travel & Adventure': {
+      Male: 'https://images.unsplash.com/photo-1507038732509-8b1a9623223a?w=800&q=80', // Man traveller
+      Female: 'https://images.unsplash.com/photo-1501504905252-473c47e087f8?w=800&q=80', // Woman traveller
+      Default: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800&q=80'
+  },
+  'Business & Career': {
+      Male: 'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800&q=80', // Man business
+      Female: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80', // Woman business
+      Default: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80'
+  },
+  'Love & Relation': {
+      Male: 'https://images.unsplash.com/photo-1621516223592-d6981881b212?w=800&q=80', // Couple
+      Female: 'https://images.unsplash.com/photo-1529634806980-85c3dd6d62d0?w=800&q=80', // Couple
+      Default: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=800&q=80'
+  },
+  'Health & Beauty': {
+      Male: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&q=80', // Gym male
+      Female: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=800&q=80', // Gym female
+      Default: 'https://images.unsplash.com/photo-1544367563-12123d896889?w=800&q=80'
+  },
+  'Dream Car': {
+      Male: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=800&q=80', // Luxury car
+      Female: 'https://images.unsplash.com/photo-1616423664033-02e071e62689?w=800&q=80', // Luxury car
+      Default: 'https://images.unsplash.com/photo-1503376763036-066120622c74?w=800&q=80'
+  },
+  'Dream Home': {
+      Male: 'https://images.unsplash.com/photo-1613545325278-f24b0cae1224?w=800&q=80',
+      Female: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80',
+      Default: 'https://images.unsplash.com/photo-1600596542815-2495db9dc2c3?w=800&q=80'
+  },
+  'Default': {
+      Male: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=800&q=80',
+      Female: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&q=80',
+      Default: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&q=80'
+  }
 };
 
-const getPlaceholderForGoal = (categories: string[]) => {
+const getPlaceholderForGoal = (categories: string[], gender?: Gender) => {
+  const g = (gender === 'Male' || gender === 'Female') ? gender : 'Default';
+  
   for (const cat of categories) {
-    if (CATEGORY_PLACEHOLDERS[cat]) return CATEGORY_PLACEHOLDERS[cat];
+    if (PLACEHOLDER_DB[cat]) {
+        return PLACEHOLDER_DB[cat][g];
+    }
   }
-  return CATEGORY_PLACEHOLDERS['Default'];
+  return PLACEHOLDER_DB['Default'][g];
 };
 
 export const Timeline: React.FC = () => {
@@ -29,14 +63,50 @@ export const Timeline: React.FC = () => {
   const [tempSelfie, setTempSelfie] = useState<string | null>(user.selfieUrl);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Visualization Timer State
+  const [isVisualizing, setIsVisualizing] = useState(false);
+  const [timerActive, setTimerActive] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [breathingPhase, setBreathingPhase] = useState('Breathe In'); // Breathe In, Hold, Breathe Out
+
+  useEffect(() => {
+    let interval: any;
+    if (timerActive) {
+      interval = setInterval(() => {
+        setSeconds(s => s + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [timerActive]);
+
+  useEffect(() => {
+      // Breathing Guide Logic (4-4-4 Box Breathingish or simpler)
+      if (timerActive) {
+        const phase = seconds % 12; // 12 second cycle
+        if (phase < 5) setBreathingPhase("Deep Inhale...");
+        else if (phase < 7) setBreathingPhase("Hold...");
+        else setBreathingPhase("Slow Exhale...");
+      }
+  }, [seconds, timerActive]);
+
+  // Haptics at key psychology milestones
+  useEffect(() => {
+    if (seconds === 17) {
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Ignition point
+    }
+    if (seconds === 68) {
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]); // Manifestation Lock
+        setTimerActive(false); // Stop timer at 68s (optional, or let it run)
+    }
+  }, [seconds]);
+
   const handleFeelItClick = (goalId: string) => {
     setActiveGoalId(goalId);
     setTempSelfie(user.selfieUrl);
     setModalOpen(true);
-    // Simple haptic feedback if available
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
-    }
+    setIsVisualizing(false); // Reset visualization state
+    setSeconds(0);
+    setTimerActive(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,6 +131,21 @@ export const Timeline: React.FC = () => {
   const handleRegenerateImage = (e: React.MouseEvent, goalId: string) => {
     e.stopPropagation(); // Prevent triggering other card actions if any
     regenerateGoalImage(goalId);
+  };
+
+  const startVisualization = () => {
+      // Trigger background personalization if we have a selfie and goal
+      if (activeGoalId && tempSelfie) {
+          personalizeGoalImage(activeGoalId, tempSelfie);
+      }
+      setIsVisualizing(true);
+      setTimerActive(true);
+  };
+
+  const resetVisualization = () => {
+      setSeconds(0);
+      setTimerActive(false);
+      setIsVisualizing(false);
   };
 
   const EmptyState = () => (
@@ -102,7 +187,7 @@ export const Timeline: React.FC = () => {
 
         {goals.length === 0 ? <EmptyState /> : goals.map((goal, index) => {
           const hasAiImage = !!goal.imageUrl;
-          const displayImage = goal.imageUrl || getPlaceholderForGoal(goal.categories);
+          const displayImage = goal.imageUrl || getPlaceholderForGoal(goal.categories, user.gender);
           const isRegenerating = goal.isRegeneratingImage;
           
           return (
@@ -176,69 +261,147 @@ export const Timeline: React.FC = () => {
         })}
       </div>
 
-      {/* Feel It Modal */}
+      {/* Feel It Modal (Visualizer) */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
-             <div className="bg-surface w-full max-w-sm rounded-3xl border border-white/10 p-6 shadow-2xl relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl animate-fade-in">
+             <div className="w-full max-w-sm rounded-3xl relative overflow-hidden flex flex-col items-center">
                 {/* Close Button */}
                 <button 
-                    onClick={() => setModalOpen(false)} 
-                    className="absolute top-4 right-4 p-2 text-gray-500 hover:text-white z-10"
+                    onClick={() => {
+                        setModalOpen(false);
+                        resetVisualization();
+                    }} 
+                    className="absolute top-0 right-0 p-4 text-gray-500 hover:text-white z-50"
                 >
-                    <X size={20} />
+                    <X size={24} />
                 </button>
 
-                <div className="text-center space-y-6 relative z-0">
-                    <div>
-                        <h2 className="text-2xl font-serif text-white mb-2">Step Into The Vision</h2>
-                        <p className="text-xs text-gray-400">Use your quantum identity to bridge the gap.</p>
-                    </div>
-
-                    {/* Image Preview */}
-                    <div className="relative w-32 h-32 mx-auto">
-                        <div className="w-full h-full rounded-full overflow-hidden border-2 border-gold/30 shadow-[0_0_20px_rgba(244,224,185,0.2)]">
-                            {tempSelfie ? (
-                                <img src={tempSelfie} alt="Identity" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full bg-black flex items-center justify-center">
-                                    <Camera className="text-gray-600" />
-                                </div>
-                            )}
+                {!isVisualizing ? (
+                    // STEP 1: PREPARATION
+                    <div className="text-center space-y-6 animate-fade-in w-full">
+                        <div>
+                            <h2 className="text-3xl font-serif text-white mb-2">Step Into The Vision</h2>
+                            <p className="text-sm text-gray-400">Use your quantum identity to bridge the gap.</p>
                         </div>
-                        <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            className="absolute bottom-0 right-0 bg-gold text-void p-2 rounded-full hover:bg-white transition-colors shadow-lg"
-                        >
-                            <Upload size={14} />
-                        </button>
-                    </div>
-                    
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        className="hidden" 
-                        accept="image/*"
-                        onChange={handleFileChange}
-                    />
 
-                    <div className="space-y-3">
-                        <p className="text-xs text-gold/80 italic border-t border-b border-white/5 py-3">
-                            "I am seeing myself in the reality where this goal is already accomplished."
-                        </p>
-                        
-                        <Button onClick={handleConfirmPersonalization} disabled={!tempSelfie}>
-                            <div className="flex items-center justify-center gap-2">
-                                <Sparkles size={16} /> Manifest This Reality
+                        {/* Image Preview */}
+                        <div className="relative w-40 h-40 mx-auto">
+                            <div className="w-full h-full rounded-full overflow-hidden border-2 border-gold/30 shadow-[0_0_30px_rgba(244,224,185,0.2)]">
+                                {tempSelfie ? (
+                                    <img src={tempSelfie} alt="Identity" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full bg-black flex items-center justify-center">
+                                        <Camera className="text-gray-600" />
+                                    </div>
+                                )}
                             </div>
-                        </Button>
-                        <button 
-                            onClick={() => setModalOpen(false)}
-                            className="text-xs text-gray-500 hover:text-gray-300"
-                        >
-                            Cancel
-                        </button>
+                            <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                className="absolute bottom-0 right-0 bg-gold text-void p-2 rounded-full hover:bg-white transition-colors shadow-lg"
+                            >
+                                <Upload size={16} />
+                            </button>
+                        </div>
+                        
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={handleFileChange}
+                        />
+
+                        {/* Actions */}
+                        <div className="space-y-3 w-full pt-4">
+                            <Button onClick={startVisualization} disabled={!tempSelfie}>
+                                <div className="flex items-center justify-center gap-2">
+                                    <Play size={18} fill="currentColor" /> Begin 68s Visualization
+                                </div>
+                            </Button>
+                            
+                             <button 
+                                onClick={handleConfirmPersonalization}
+                                disabled={!tempSelfie}
+                                className="text-xs text-gold/60 hover:text-gold w-full py-2"
+                            >
+                                (Just update my photo)
+                            </button>
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    // STEP 2: 68-SECOND TIMER
+                    <div className="flex flex-col items-center justify-center w-full h-[60vh] space-y-8 animate-fade-in relative">
+                        {/* Timer Circle */}
+                        <div className="relative w-64 h-64 flex items-center justify-center">
+                            {/* Pulsing Background */}
+                            <div 
+                                className={`absolute inset-0 bg-gold/5 rounded-full blur-2xl transition-all duration-[4000ms] ease-in-out ${breathingPhase.includes('Inhale') ? 'scale-110 opacity-60' : 'scale-90 opacity-20'}`}
+                            ></div>
+                            
+                            {/* Progress Ring */}
+                            <svg className="w-full h-full transform -rotate-90">
+                                <circle 
+                                    cx="128" cy="128" r="120" 
+                                    stroke="rgba(255,255,255,0.1)" strokeWidth="4" fill="none" 
+                                />
+                                <circle 
+                                    cx="128" cy="128" r="120" 
+                                    stroke="#F4E0B9" strokeWidth="4" fill="none"
+                                    strokeDasharray={2 * Math.PI * 120}
+                                    strokeDashoffset={2 * Math.PI * 120 * (1 - seconds / 68)}
+                                    className="transition-all duration-1000 linear"
+                                />
+                            </svg>
+
+                            {/* Content inside Circle */}
+                            <div className="absolute flex flex-col items-center text-center">
+                                <span className="text-5xl font-serif text-white font-bold tabular-nums">
+                                    {seconds}s
+                                </span>
+                                <span className="text-xs text-gold uppercase tracking-widest mt-2">
+                                    {seconds >= 68 ? "LOCKED" : seconds >= 17 ? "IGNITED" : "FOCUS"}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Breathing Guide / Affirmation */}
+                        <div className="text-center h-20">
+                             {seconds >= 68 ? (
+                                 <div className="animate-fade-in">
+                                     <h3 className="text-2xl text-gold font-serif mb-2">Manifestation Anchored</h3>
+                                     <p className="text-gray-400 text-sm">The universe is rearranging itself.</p>
+                                 </div>
+                             ) : (
+                                 <div className="space-y-2">
+                                     <h3 className={`text-xl font-light text-white/90 transition-opacity duration-1000 ${breathingPhase.includes('Hold') ? 'opacity-50' : 'opacity-100'}`}>
+                                        {breathingPhase}
+                                     </h3>
+                                     <p className="text-xs text-gray-500 italic">
+                                         Feel the reality of having it now.
+                                     </p>
+                                 </div>
+                             )}
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex gap-6">
+                            {seconds < 68 && (
+                                <button 
+                                    onClick={() => setTimerActive(!timerActive)}
+                                    className="p-4 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
+                                >
+                                    {timerActive ? <Pause size={24} /> : <Play size={24} fill="currentColor" />}
+                                </button>
+                            )}
+                            <button 
+                                onClick={resetVisualization}
+                                className="p-4 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+                            >
+                                <RotateCcw size={24} />
+                            </button>
+                        </div>
+                    </div>
+                )}
              </div>
         </div>
       )}

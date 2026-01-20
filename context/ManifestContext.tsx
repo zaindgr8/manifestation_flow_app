@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, PropsWithChildren } from 'react';
-import { UserProfile, VisionGoal, DailyRitual, AppScreen, AffirmationState, LifestyleShift } from '../types';
+import { UserProfile, VisionGoal, DailyRitual, AppScreen, AffirmationState, LifestyleShift, GratitudeEntry } from '../types';
 import { generateDailyAffirmation, generateVisionBoardImage, generatePersonalizedGoalImage } from '../services/geminiService';
 
 interface ManifestContextType {
@@ -7,6 +7,7 @@ interface ManifestContextType {
   goals: VisionGoal[];
   rituals: DailyRitual[];
   lifestyleHistory: LifestyleShift[];
+  gratitudeEntries: GratitudeEntry[];
   currentScreen: AppScreen;
   affirmation: AffirmationState;
   updateUser: (updates: Partial<UserProfile>) => void;
@@ -15,6 +16,7 @@ interface ManifestContextType {
   deleteRitual: (id: string) => void;
   updateRitualTitle: (id: string, title: string) => void;
   toggleRitual: (id: string) => void;
+  addGratitude: (text: string) => void;
   setScreen: (screen: AppScreen) => void;
   refreshAffirmation: (forceType?: 'MORNING' | 'EVENING') => Promise<void>;
   acknowledgeAffirmation: () => void;
@@ -41,6 +43,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   const [goals, setGoals] = useState<VisionGoal[]>([]);
   const [rituals, setRituals] = useState<DailyRitual[]>([]);
   const [lifestyleHistory, setLifestyleHistory] = useState<LifestyleShift[]>([]);
+  const [gratitudeEntries, setGratitudeEntries] = useState<GratitudeEntry[]>([]);
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('ONBOARDING');
   const [affirmation, setAffirmation] = useState<AffirmationState>({
     text: "Welcome to your new reality.",
@@ -90,9 +93,9 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     setGoals(prev => [...prev, newGoal]);
     setRituals(prev => [...prev, ...newRituals]);
 
-    // Background Image Generation
+    // Background Image Generation - Pass User for Demographics
     try {
-        const generatedImage = await generateVisionBoardImage(newGoal.title, newGoal.categories);
+        const generatedImage = await generateVisionBoardImage(newGoal.title, newGoal.categories, user);
         if (generatedImage) {
             setGoals(prev => prev.map(g => 
                 g.id === newGoalId ? { ...g, imageUrl: generatedImage } : g
@@ -124,6 +127,13 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     setRituals(prev => prev.map(r => r.id === id ? { ...r, title } : r));
   };
 
+  const addGratitude = (text: string) => {
+    setGratitudeEntries(prev => [
+      { id: Date.now().toString(), text, createdAt: Date.now() },
+      ...prev
+    ]);
+  };
+
   const regenerateGoalImage = async (goalId: string) => {
     const goal = goals.find(g => g.id === goalId);
     if (!goal) return;
@@ -132,7 +142,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     setGoals(prev => prev.map(g => g.id === goalId ? { ...g, isRegeneratingImage: true } : g));
 
     try {
-        const generatedImage = await generateVisionBoardImage(goal.title, goal.categories);
+        const generatedImage = await generateVisionBoardImage(goal.title, goal.categories, user);
         if (generatedImage) {
             setGoals(prev => prev.map(g => 
                 g.id === goalId ? { ...g, imageUrl: generatedImage, isRegeneratingImage: false } : g
@@ -264,6 +274,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
 
   const resetDay = () => {
      setRituals(prev => prev.map(r => ({ ...r, isCompleted: false })));
+     // Gratitude reset logic could go here if we only want daily gratitude
   };
 
   return (
@@ -272,6 +283,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       goals,
       rituals,
       lifestyleHistory,
+      gratitudeEntries,
       currentScreen,
       affirmation,
       updateUser,
@@ -279,6 +291,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       addRitual,
       deleteRitual,
       updateRitualTitle,
+      addGratitude,
       toggleRitual,
       setScreen,
       refreshAffirmation,

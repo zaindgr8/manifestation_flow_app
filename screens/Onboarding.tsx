@@ -2,12 +2,16 @@ import React, { useState, useRef } from 'react';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Camera, Upload, Sparkles, X, Aperture } from 'lucide-react';
+import { Camera, Upload, Sparkles, X, Aperture, Calendar as CalendarIcon, User } from 'lucide-react';
+import { Gender } from '../types';
 
 export const Onboarding: React.FC = () => {
   const { updateUser } = useManifest();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
+  const [gender, setGender] = useState<Gender | ''>('');
+  const [dob, setDob] = useState('');
+  
   const [selfie, setSelfie] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   
@@ -63,7 +67,13 @@ export const Onboarding: React.FC = () => {
   };
 
   const finishOnboarding = () => {
-    updateUser({ name, selfieUrl: selfie, isOnboarded: true });
+    updateUser({ 
+        name, 
+        gender: gender as Gender,
+        dob,
+        selfieUrl: selfie, 
+        isOnboarded: true 
+    });
   };
 
   return (
@@ -80,14 +90,43 @@ export const Onboarding: React.FC = () => {
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
             <h1 className="text-4xl font-serif text-white">Who is manifesting?</h1>
-            <p className="text-gray-400 font-sans">Enter your name to begin the shift.</p>
+            <p className="text-gray-400 font-sans">Enter your details to tailor the energy.</p>
+            
             <Input 
               placeholder="Your Name" 
               value={name} 
               onChange={(e) => setName(e.target.value)}
               autoFocus
             />
-            <Button disabled={!name} onClick={() => setStep(2)}>
+
+            <div className="flex gap-4">
+                <div className="w-full space-y-2">
+                    <label className="block text-sm text-gold/80 font-serif tracking-wide text-left ml-1">Gender</label>
+                    <select
+                        value={gender}
+                        onChange={(e) => setGender(e.target.value as Gender)}
+                        className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-4 text-white placeholder-white/20 focus:outline-none focus:border-gold/50 transition-all appearance-none"
+                    >
+                        <option value="" disabled>Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Non-Binary">Non-Binary</option>
+                        <option value="Prefer not to say">Prefer not to say</option>
+                    </select>
+                </div>
+            </div>
+
+            <div className="w-full space-y-2">
+                <label className="block text-sm text-gold/80 font-serif tracking-wide text-left ml-1">Date of Birth</label>
+                <input 
+                    type="date"
+                    value={dob}
+                    onChange={(e) => setDob(e.target.value)}
+                    className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-4 text-white placeholder-white/20 focus:outline-none focus:border-gold/50 transition-all"
+                />
+            </div>
+
+            <Button disabled={!name || !gender || !dob} onClick={() => setStep(2)}>
               Continue
             </Button>
           </div>

@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
-import { generateLifestyleSimulation } from '../services/geminiService';
-import { Wand2, Camera, Upload, Sparkles, Loader2, History, ArrowUpRight } from 'lucide-react';
+import { generateLifestyleSimulation, generateLifestyleSuggestions } from '../services/geminiService';
+import { Wand2, Camera, Upload, Sparkles, Loader2, History, ArrowUpRight, Lightbulb } from 'lucide-react';
 
 export const LifestyleSimulator: React.FC = () => {
   const { user, lifestyleHistory, addToLifestyleHistory } = useManifest();
@@ -10,8 +10,21 @@ export const LifestyleSimulator: React.FC = () => {
   const [currentImage, setCurrentImage] = useState<string | null>(user.selfieUrl);
   const [generatedResult, setGeneratedResult] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+        setLoadingSuggestions(true);
+        const suggs = await generateLifestyleSuggestions(user);
+        setSuggestions(suggs);
+        setLoadingSuggestions(false);
+    };
+    fetchSuggestions();
+  }, [user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -134,17 +147,30 @@ export const LifestyleSimulator: React.FC = () => {
                 onChange={(e) => setDescription(e.target.value)}
             />
             
-            {/* Quick Chips */}
-            <div className="flex flex-wrap gap-2">
-                {['Luxury Penthouse', 'Driving Supercar', 'Tropical Villa', 'Red Carpet Event'].map(tag => (
-                    <button 
-                    key={tag}
-                    onClick={() => setDescription(prev => prev ? `${prev}, ${tag}` : tag)}
-                    className="text-[10px] uppercase tracking-widest bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1 rounded-full text-gray-400 transition-colors"
-                    >
-                    {tag}
-                    </button>
-                ))}
+            {/* Quick Chips & Suggestions */}
+            <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-xs text-gold/60">
+                    <Lightbulb size={12} /> Recommended Shifting Scenarios
+                </div>
+                
+                {loadingSuggestions ? (
+                     <div className="flex gap-2 animate-pulse">
+                         <div className="h-6 w-24 bg-white/5 rounded-full"></div>
+                         <div className="h-6 w-32 bg-white/5 rounded-full"></div>
+                     </div>
+                ) : (
+                    <div className="flex flex-wrap gap-2">
+                        {suggestions.map((suggestion, idx) => (
+                             <button 
+                                key={idx}
+                                onClick={() => setDescription(suggestion)}
+                                className="text-[10px] text-left uppercase tracking-wider bg-white/5 hover:bg-gold/10 border border-white/10 hover:border-gold/30 px-3 py-2 rounded-lg text-gray-300 hover:text-white transition-all whitespace-normal max-w-full"
+                            >
+                                {suggestion}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             </div>
 

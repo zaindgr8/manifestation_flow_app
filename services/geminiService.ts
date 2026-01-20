@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, VisionGoal } from "../types";
 
@@ -25,6 +26,13 @@ const urlToBase64 = async (url: string): Promise<string> => {
   }
 };
 
+const getAge = (dob?: string) => {
+  if (!dob) return '';
+  const diff = Date.now() - new Date(dob).getTime();
+  const age = new Date(diff).getUTCFullYear() - 1970;
+  return age;
+};
+
 export const generateDailyAffirmation = async (
   user: UserProfile,
   goals: VisionGoal[],
@@ -32,27 +40,36 @@ export const generateDailyAffirmation = async (
 ): Promise<string> => {
   try {
     if (!process.env.API_KEY) {
-      return `I am ${user.name}, and I am worthy of my dreams.`;
+      return `I will achieve my dreams through discipline and focus.`;
     }
 
-    const goalSummaries = goals.map(g => `[${g.categories.join(', ')}]: ${g.title}`).join("; ");
+    // Pick a random goal to focus on to keep it specific and simple
+    const randomGoal = goals.length > 0 ? goals[Math.floor(Math.random() * goals.length)] : null;
     
-    let contextPrompt = "";
-    if (timeOfDay === 'MORNING') {
-      contextPrompt = "This is a Morning Affirmation. The tone should be energetic, setting a powerful intention for the day, and focused on taking action.";
+    let goalContext = "";
+    if (randomGoal) {
+        goalContext = `Focus specifically on this goal: "${randomGoal.title}" which is due on ${randomGoal.targetDate}.`;
     } else {
-      contextPrompt = "This is an Evening Affirmation. The tone should be reflective, filled with gratitude, subconscious programming for sleep, and feeling that the wish is already fulfilled.";
+        goalContext = "Focus on general success and wealth.";
     }
 
     const prompt = `
       The user's name is ${user.name}.
-      They are manifesting the following desires: ${goalSummaries}.
+      ${goalContext}
       
-      ${contextPrompt}
+      Generate a SINGLE, short, powerful, and concrete affirmation statement.
+      Structure it like this: "I will [achieve specific goal] by [specific action/trait]."
       
-      Create a powerful, present-tense, "I am" affirmation.
-      The overall aesthetic is "Mystic Luxury" - confident, serene, and abundant.
-      Do not use quotation marks. Keep it under 25 words.
+      Examples:
+      - "I will buy my Lamborghini by remaining disciplined and closing 5 deals today."
+      - "I will sign the contract by radiating confidence and preparation."
+      - "I will achieve perfect health by sticking to my workout routine."
+      
+      Rules:
+      1. Keep it under 20 words.
+      2. No "Mystic" or flowery language. Be direct, grounded, and practical.
+      3. Use "I will" or "I am".
+      4. Do not use quotation marks.
     `;
 
     const response = await ai.models.generateContent({
@@ -60,24 +77,35 @@ export const generateDailyAffirmation = async (
       contents: prompt,
     });
 
-    return response.text?.trim() || "I am aligning with the frequency of abundance.";
+    return response.text?.trim() || "I will manifest my goals through consistent daily action.";
   } catch (error) {
     console.error("Gemini Affirmation Error:", error);
-    return "I am aligning with the frequency of abundance.";
+    return "I will manifest my goals through consistent daily action.";
   }
 };
 
 export const generateVisionBoardImage = async (
   title: string,
-  categories: string[]
+  categories: string[],
+  user?: UserProfile
 ): Promise<string | null> => {
   try {
     if (!process.env.API_KEY) return null;
+
+    let demographics = "";
+    if (user) {
+        const age = getAge(user.dob);
+        const gender = user.gender;
+        if (age || gender) {
+            demographics = `The subject in the image should appear to be a ${gender || ''} ${age ? `around ${age} years old` : ''}.`;
+        }
+    }
 
     const prompt = `
       Generate a photorealistic, high-definition, cinematic image for a vision board.
       The goal is: "${title}".
       The context categories are: ${categories.join(', ')}.
+      ${demographics}
       
       Aesthetic Style: "Mystic Luxury". Dark, moody, elegant, with subtle gold lighting accents. 
       The image should represent the successful achievement of this goal.
@@ -216,3 +244,43 @@ export const generateLifestyleSimulation = async (
     return null;
   }
 };
+
+export const generateLifestyleSuggestions = async (user: UserProfile): Promise<string[]> => {
+    try {
+        if (!process.env.API_KEY) return [
+            "Sitting in a private jet cabin reviewing contracts",
+            "Yoga on a yacht deck in the Mediterranean",
+            "Walking a tiger on a leash in Dubai"
+        ];
+
+        const age = getAge(user.dob);
+        const gender = user.gender;
+        const demographics = `${gender || 'person'} ${age ? `aged ${age}` : ''}`;
+
+        const prompt = `
+            Generate 4 distinct, ultra-luxurious, and visually stunning lifestyle scenarios for a vision board app.
+            Target Audience: A ${demographics}.
+            Theme: Wealth, Health, Freedom, and High Status.
+            
+            Output format: Just the descriptions, separated by a pipe symbol "|". 
+            Example: Driving a vintage convertible along the Amalfi Coast|Hosting a gala in a modern glass mansion
+            Keep descriptions concise (under 12 words each) but evocative.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+
+        const text = response.text?.trim() || "";
+        return text.split('|').map(s => s.trim()).filter(s => s.length > 0).slice(0, 4);
+    } catch (e) {
+        console.error("Suggestion Error", e);
+        return [
+            "Driving a hypercar through Tokyo neon streets",
+            "Meditating in a floating glass pod above a rainforest",
+            "Signing a major deal in a skyscraper boardroom",
+            "Relaxing in a thermal infinity pool in Iceland"
+        ];
+    }
+}
