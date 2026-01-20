@@ -2,14 +2,23 @@ export interface UserProfile {
   name: string;
   selfieUrl: string | null;
   isOnboarded: boolean;
+  hasSetSchedule: boolean; // To track if user has defined their timing
+  affirmationStreak: number;
+  lastAffirmationAck: string | null; // ISO Date string of last ack
+  reminderTimes: {
+    morning: string;
+    evening: string;
+  };
 }
 
 export interface VisionGoal {
   id: string;
-  category: 'Car' | 'Home' | 'Relationship' | 'Wealth' | 'Health' | 'Other';
+  categories: string[]; 
   title: string;
   targetDate: string;
   createdAt: number;
+  imageUrl?: string; // Stores the AI generated image or null
+  isRegeneratingImage?: boolean; // UI state for image generation
 }
 
 export interface DailyRitual {
@@ -20,9 +29,18 @@ export interface DailyRitual {
   lastCompletedDate: string | null;
 }
 
-export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER';
+export interface LifestyleShift {
+  id: string;
+  imageUrl: string;
+  prompt: string;
+  createdAt: number;
+}
+
+export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER' | 'SIMULATOR';
 
 export interface AffirmationState {
   text: string;
+  type: 'MORNING' | 'EVENING';
   lastGenerated: string | null;
+  isAcknowledged: boolean; // Specific to the current session/type
 }

@@ -4,7 +4,8 @@ import { Onboarding } from './screens/Onboarding';
 import { VisionWizard } from './screens/VisionWizard';
 import { Timeline } from './screens/Timeline';
 import { DailyAligner } from './screens/DailyAligner';
-import { LayoutDashboard, Calendar } from 'lucide-react';
+import { LifestyleSimulator } from './screens/LifestyleSimulator';
+import { LayoutDashboard, Calendar, Wand2 } from 'lucide-react';
 
 const AppContent = () => {
   const { currentScreen, setScreen, user } = useManifest();
@@ -16,6 +17,7 @@ const AppContent = () => {
       case 'WIZARD': return <VisionWizard />;
       case 'TIMELINE': return <Timeline />;
       case 'ALIGNER': return <DailyAligner />;
+      case 'SIMULATOR': return <LifestyleSimulator />;
       default: return <Onboarding />;
     }
   };
@@ -35,10 +37,18 @@ const AppContent = () => {
             
             <button 
               onClick={() => setScreen('TIMELINE')}
-              className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${currentScreen === 'TIMELINE' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'TIMELINE' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
             >
               <Calendar size={20} className={currentScreen === 'TIMELINE' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
               <span className="text-[9px] uppercase tracking-widest mt-1">Vision</span>
+            </button>
+
+             <button 
+              onClick={() => setScreen('SIMULATOR')}
+              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'SIMULATOR' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+            >
+              <Wand2 size={20} className={currentScreen === 'SIMULATOR' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
+              <span className="text-[9px] uppercase tracking-widest mt-1">Shift</span>
             </button>
 
             {/* Middle Action Button (Add) */}
@@ -51,7 +61,7 @@ const AppContent = () => {
 
             <button 
               onClick={() => setScreen('ALIGNER')}
-              className={`flex flex-col items-center justify-center w-16 h-full transition-colors ${currentScreen === 'ALIGNER' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'ALIGNER' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
             >
               <LayoutDashboard size={20} className={currentScreen === 'ALIGNER' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
               <span className="text-[9px] uppercase tracking-widest mt-1">Align</span>
