@@ -1,0 +1,8 @@
+{
+  "name": "ManifestFlow",
+  "description": "A mystic luxury manifestation and productivity architect bridging the Law of Attraction with daily cognitive action.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
