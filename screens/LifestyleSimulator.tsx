@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { generateLifestyleSimulation, generateLifestyleSuggestions } from '../services/geminiService';
-import { Wand2, Camera, Upload, Sparkles, Loader2, History, ArrowUpRight, Lightbulb } from 'lucide-react';
+import { Wand2, Camera, Upload, Sparkles, Loader2, History, ArrowUpRight, Lightbulb, RefreshCw } from 'lucide-react';
 
 export const LifestyleSimulator: React.FC = () => {
-  const { user, lifestyleHistory, addToLifestyleHistory } = useManifest();
+  const { user, lifestyleHistory, addToLifestyleHistory, goals } = useManifest();
   const [description, setDescription] = useState('');
   const [currentImage, setCurrentImage] = useState<string | null>(user.selfieUrl);
   const [generatedResult, setGeneratedResult] = useState<string | null>(null);
@@ -17,14 +17,16 @@ export const LifestyleSimulator: React.FC = () => {
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const fetchSuggestions = async () => {
-        setLoadingSuggestions(true);
-        const suggs = await generateLifestyleSuggestions(user);
-        setSuggestions(suggs);
-        setLoadingSuggestions(false);
-    };
     fetchSuggestions();
-  }, [user]);
+  }, [user, goals]);
+
+  const fetchSuggestions = async () => {
+      setLoadingSuggestions(true);
+      // Pass goals to get personalized fantasies
+      const suggs = await generateLifestyleSuggestions(user, goals);
+      setSuggestions(suggs);
+      setLoadingSuggestions(false);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -149,8 +151,17 @@ export const LifestyleSimulator: React.FC = () => {
             
             {/* Quick Chips & Suggestions */}
             <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-xs text-gold/60">
-                    <Lightbulb size={12} /> Recommended Shifting Scenarios
+                <div className="flex items-center justify-between text-xs text-gold/60">
+                    <div className="flex items-center gap-2">
+                        <Lightbulb size={12} /> Recommended Shifting Scenarios
+                    </div>
+                    <button 
+                        onClick={fetchSuggestions} 
+                        className={`flex items-center gap-1 hover:text-gold transition-colors ${loadingSuggestions ? 'animate-spin' : ''}`}
+                        title="New Ideas"
+                    >
+                        <RefreshCw size={12} />
+                    </button>
                 </div>
                 
                 {loadingSuggestions ? (

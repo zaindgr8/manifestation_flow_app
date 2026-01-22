@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
-import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Calendar as CalendarIcon, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles } from 'lucide-react';
+import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Calendar as CalendarIcon, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles, Maximize2 } from 'lucide-react';
 import { Button } from '../components/Button';
 
 export const DailyAligner: React.FC = () => {
@@ -8,6 +8,7 @@ export const DailyAligner: React.FC = () => {
   const [showConfetti, setShowConfetti] = useState(false);
   const [loadingAffirmation, setLoadingAffirmation] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFullPhoto, setShowFullPhoto] = useState(false);
 
   // Add Ritual State
   const [isAdding, setIsAdding] = useState(false);
@@ -38,10 +39,9 @@ export const DailyAligner: React.FC = () => {
   }, [isAllComplete]);
 
   // Check if we need to force a refresh based on time vs current affirmation type
+  // Triggered on mount if scheduled. 
   useEffect(() => {
-     if (user.hasSetSchedule) {
-        // Logic to verify if currently displayed affirmation matches the time of day
-        // This is handled partly in Context, but we trigger a refresh on mount to ensure freshness
+     if (user.hasSetSchedule && !affirmation.text) {
         refreshAffirmation();
      }
   }, [user.hasSetSchedule]);
@@ -124,7 +124,25 @@ export const DailyAligner: React.FC = () => {
         </div>
       )}
 
-      {/* Settings Modal (Also used for initial setup) */}
+      {/* Full Size Photo Modal */}
+      {showFullPhoto && user.selfieUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 animate-fade-in p-4">
+             <button 
+                onClick={() => setShowFullPhoto(false)} 
+                className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 z-50"
+             >
+                <X size={24} />
+             </button>
+             <div className="relative max-w-full max-h-full rounded-2xl overflow-hidden shadow-2xl border border-gold/30">
+                 <img src={user.selfieUrl} alt="Identity Anchor" className="max-h-[85vh] w-auto object-contain" />
+                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-center">
+                    <p className="text-gold font-serif text-lg">Identity Anchor</p>
+                 </div>
+             </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
       {(showSettings || !user.hasSetSchedule) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
            <div className="bg-surface w-full max-w-sm rounded-2xl border border-white/10 p-6 shadow-2xl relative">
@@ -179,9 +197,17 @@ export const DailyAligner: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full border border-gold/30 p-0.5">
+            <div 
+                className="w-12 h-12 rounded-full border border-gold/30 p-0.5 cursor-pointer relative group"
+                onClick={() => setShowFullPhoto(true)}
+            >
                 {user.selfieUrl ? (
-                    <img src={user.selfieUrl} className="w-full h-full rounded-full object-cover" alt="User" />
+                    <>
+                        <img src={user.selfieUrl} className="w-full h-full rounded-full object-cover" alt="User" />
+                        <div className="absolute inset-0 bg-black/30 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Maximize2 size={14} className="text-white" />
+                        </div>
+                    </>
                 ) : (
                     <div className="w-full h-full rounded-full bg-surface" />
                 )}

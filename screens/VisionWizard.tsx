@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { ArrowRight, Star, Calendar, Activity, Plus, Check, X, ArrowLeft } from 'lucide-react';
+import { ArrowRight, Star, Calendar, Activity, Plus, Check, X, ArrowLeft, Loader2 } from 'lucide-react';
 
 const GOAL_PLACEHOLDERS: Record<string, string> = {
   'Travel & Adventure': 'e.g., Two weeks in Kyoto, Backpacking Europe, African Safari...',
@@ -29,7 +29,7 @@ type CategoryData = {
 };
 
 export const VisionWizard: React.FC = () => {
-  const { addGoalAndRitual, setScreen } = useManifest();
+  const { addGoalAndRitual, setScreen, goals } = useManifest();
   
   // Step 1: Selection Phase
   // Step 2: Definition Phase (Looping through categories)
@@ -55,13 +55,22 @@ export const VisionWizard: React.FC = () => {
   // Data Store
   const [formData, setFormData] = useState<Record<string, CategoryData>>({});
   const [currentRitualInput, setCurrentRitualInput] = useState(''); // Temp input for the ritual adder
+  
+  // Loading State
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Helpers
   const currentCategoryIndex = Math.floor(flowIndex / 2);
   const currentCategory = selectedCategories[currentCategoryIndex];
   const isRitualStep = flowIndex % 2 === 1;
 
+  // Identify active categories to disable them
+  const activeCategories = new Set(goals.flatMap(g => g.categories));
+
   const toggleCategory = (cat: string) => {
+    // Prevent toggling if already active in Timeline
+    if (activeCategories.has(cat)) return;
+
     setSelectedCategories(prev => 
       prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
     );
@@ -69,8 +78,9 @@ export const VisionWizard: React.FC = () => {
 
   const handleAddCustomCategory = () => {
     if (newCategoryName.trim()) {
-      setAvailableCategories(prev => [...prev, newCategoryName.trim()]);
-      setSelectedCategories(prev => [...prev, newCategoryName.trim()]);
+      const name = newCategoryName.trim();
+      setAvailableCategories(prev => [...prev, name]);
+      setSelectedCategories(prev => [...prev, name]);
       setNewCategoryName('');
       setIsAddingCustom(false);
     }
@@ -101,10 +111,25 @@ export const VisionWizard: React.FC = () => {
 
   const handleNext = () => {
     if (phase === 'SELECTION') {
-      if (selectedCategories.length === 0) return;
+      // Auto-add custom category if user typed but didn't click check
+      let finalSelected = [...selectedCategories];
+      if (isAddingCustom && newCategoryName.trim()) {
+          const name = newCategoryName.trim();
+          if (!activeCategories.has(name)) { // Only add if not active
+             // Ensure it's in available (visual only)
+             setAvailableCategories(prev => prev.includes(name) ? prev : [...prev, name]);
+             // Add to selected
+             finalSelected = [...finalSelected, name];
+          }
+      }
+
+      if (finalSelected.length === 0) return;
+      
+      setSelectedCategories(finalSelected); // Update state just in case
+      
       // Initialize data structure for selected categories
       const initialData: Record<string, CategoryData> = {};
-      selectedCategories.forEach(cat => {
+      finalSelected.forEach(cat => {
         initialData[cat] = { title: '', targetDate: '', rituals: [] };
       });
       setFormData(prev => ({ ...prev, ...initialData }));
@@ -113,14 +138,6 @@ export const VisionWizard: React.FC = () => {
     } else {
       // Definition Phase
       if (isRitualStep) {
-        // If we have text in the input but haven't added it, add it automatically
-        if (currentRitualInput.trim()) {
-            addRitualToCurrent();
-            // We need to wait for state update? No, just push it to the queue logic below or assume user clicked +
-            // Better UX: require them to click + or just process it.
-            // Let's explicitly check rituals length.
-        }
-
         const currentData = formData[currentCategory];
         // Ensure at least one ritual exists (including potentially the one just in input)
         const effectiveRituals = [...(currentData?.rituals || [])];
@@ -136,7 +153,15 @@ export const VisionWizard: React.FC = () => {
 
         // Check if this was the last step
         if (flowIndex === (selectedCategories.length * 2) - 1) {
-          handleSubmitAll();
+          // Pass the updated data for this category explicitly to avoid stale state closure
+          const finalDataOverride = {
+             ...formData,
+             [currentCategory]: {
+                 ...formData[currentCategory],
+                 rituals: effectiveRituals
+             }
+          };
+          handleSubmitAll(finalDataOverride);
         } else {
           setFlowIndex(prev => prev + 1);
         }
@@ -151,8 +176,6 @@ export const VisionWizard: React.FC = () => {
 
   const handleBack = () => {
     if (phase === 'SELECTION') {
-      // No back from selection in this context (or go to Onboarding?)
-      // Let's assume we just stay here or maybe cancel
       setScreen('TIMELINE'); 
     } else {
       if (flowIndex === 0) {
@@ -163,22 +186,32 @@ export const VisionWizard: React.FC = () => {
     }
   };
 
-  const handleSubmitAll = async () => {
-    // Process all categories
-    for (const cat of selectedCategories) {
-      const data = formData[cat];
-      if (data) {
-        await addGoalAndRitual(
-          { 
-            categories: [cat], // Separate category for specific placeholder logic
-            title: data.title, 
-            targetDate: data.targetDate 
-          },
-          data.rituals
-        );
-      }
+  const handleSubmitAll = async (overrideData?: Record<string, CategoryData>) => {
+    if (isSubmitting) return; // Prevention
+    setIsSubmitting(true);
+
+    const dataToUse = overrideData || formData;
+
+    try {
+        // Process all categories
+        for (const cat of selectedCategories) {
+        const data = dataToUse[cat];
+        if (data) {
+            await addGoalAndRitual(
+            { 
+                categories: [cat], // Separate category for specific placeholder logic
+                title: data.title, 
+                targetDate: data.targetDate 
+            },
+            data.rituals
+            );
+        }
+        }
+        setScreen('TIMELINE');
+    } catch (e) {
+        console.error("Submission error", e);
+        setIsSubmitting(false);
     }
-    setScreen('TIMELINE');
   };
 
   const renderSelection = () => (
@@ -189,18 +222,24 @@ export const VisionWizard: React.FC = () => {
       <div className="grid grid-cols-2 gap-3 max-h-[50vh] overflow-y-auto pr-1 custom-scrollbar">
         {availableCategories.map(cat => {
           const isSelected = selectedCategories.includes(cat);
+          const isActive = activeCategories.has(cat);
+          
           return (
             <button
               key={cat}
               onClick={() => toggleCategory(cat)}
-              className={`p-4 rounded-xl border text-sm font-medium transition-all duration-300 relative overflow-hidden group ${
-                isSelected 
-                ? 'border-gold bg-gold/10 text-white shadow-[0_0_10px_rgba(244,224,185,0.2)]' 
-                : 'border-white/10 bg-surface/50 text-gray-400 hover:border-gold/30'
+              disabled={isActive}
+              className={`p-4 rounded-xl border text-sm font-medium transition-all duration-300 relative overflow-hidden group text-left ${
+                isActive 
+                  ? 'border-gray-800 bg-gray-900/50 text-gray-600 cursor-not-allowed'
+                  : isSelected 
+                    ? 'border-gold bg-gold/10 text-white shadow-[0_0_10px_rgba(244,224,185,0.2)]' 
+                    : 'border-white/10 bg-surface/50 text-gray-400 hover:border-gold/30'
               }`}
             >
               <span className="relative z-10">{cat}</span>
-              {isSelected && (
+              {isActive && <span className="block text-[9px] uppercase tracking-widest mt-1">Active</span>}
+              {isSelected && !isActive && (
                 <div className="absolute top-2 right-2 text-gold opacity-50">
                    <Check size={12} />
                 </div>
@@ -221,7 +260,7 @@ export const VisionWizard: React.FC = () => {
                   if (e.key === 'Enter') handleAddCustomCategory();
                 }}
                 onBlur={() => {
-                  if (!newCategoryName) setIsAddingCustom(false);
+                   // Optional: keep it open if focused, or close if empty
                 }}
              />
              <button onClick={handleAddCustomCategory} className="p-2 text-gold hover:bg-white/10 rounded-full">
@@ -241,7 +280,7 @@ export const VisionWizard: React.FC = () => {
 
       <div className="flex gap-4">
           <Button variant="secondary" onClick={() => setScreen('TIMELINE')}>Cancel</Button>
-          <Button disabled={selectedCategories.length === 0} onClick={handleNext}>
+          <Button disabled={selectedCategories.length === 0 && !newCategoryName.trim()} onClick={handleNext}>
             Start Visioning <ArrowRight className="inline ml-2 w-4 h-4" />
           </Button>
       </div>
@@ -284,8 +323,8 @@ export const VisionWizard: React.FC = () => {
         </div>
 
         <div className="flex gap-4 pt-4">
-          <Button variant="secondary" onClick={handleBack}>Back</Button>
-          <Button disabled={!data.title || !data.targetDate} onClick={handleNext}>
+          <Button variant="secondary" onClick={handleBack} disabled={isSubmitting}>Back</Button>
+          <Button disabled={!data.title || !data.targetDate || isSubmitting} onClick={handleNext}>
              Define Rituals <ArrowRight className="inline ml-2 w-4 h-4" />
           </Button>
         </div>
@@ -325,10 +364,11 @@ export const VisionWizard: React.FC = () => {
                     onKeyDown={(e) => e.key === 'Enter' && addRitualToCurrent()}
                     autoFocus
                     className="flex-1"
+                    disabled={isSubmitting}
                 />
                 <button 
                     onClick={addRitualToCurrent}
-                    disabled={!currentRitualInput.trim()}
+                    disabled={!currentRitualInput.trim() || isSubmitting}
                     className="mt-8 p-4 bg-gold/10 border border-gold/30 rounded-xl text-gold hover:bg-gold/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                     <Plus size={20} />
@@ -340,7 +380,7 @@ export const VisionWizard: React.FC = () => {
                 {rituals.map((h, i) => (
                     <div key={i} className="flex justify-between items-center p-3 bg-surface/50 rounded-lg border border-white/5 animate-fade-in">
                         <span className="text-sm text-gray-200">{h}</span>
-                        <button onClick={() => removeRitualFromCurrent(i)} className="text-gray-500 hover:text-red-400 p-1">
+                        <button onClick={() => removeRitualFromCurrent(i)} disabled={isSubmitting} className="text-gray-500 hover:text-red-400 p-1">
                             <X size={14} />
                         </button>
                     </div>
@@ -352,9 +392,22 @@ export const VisionWizard: React.FC = () => {
         </div>
 
         <div className="flex gap-4 pt-4">
-          <Button variant="secondary" onClick={handleBack}>Back</Button>
-          <Button disabled={rituals.length === 0 && !currentRitualInput.trim()} onClick={handleNext}>
-             {isLastStep ? "Manifest All" : "Next Category"}
+          <Button variant="secondary" onClick={handleBack} disabled={isSubmitting}>Back</Button>
+          <Button 
+            disabled={(rituals.length === 0 && !currentRitualInput.trim()) || isSubmitting} 
+            onClick={handleNext}
+            className="flex items-center justify-center gap-2"
+          >
+             {isSubmitting ? (
+                 <>
+                   <Loader2 className="animate-spin w-4 h-4" /> Manifesting...
+                 </>
+             ) : (
+                 <>
+                    {isLastStep ? "Manifest All" : "Next Category"}
+                    {!isLastStep && <ArrowRight className="w-4 h-4" />}
+                 </>
+             )}
           </Button>
         </div>
       </div>

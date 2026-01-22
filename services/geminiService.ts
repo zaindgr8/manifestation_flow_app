@@ -43,14 +43,13 @@ export const generateDailyAffirmation = async (
       return `I will achieve my dreams through discipline and focus.`;
     }
 
-    // Pick a random goal to focus on to keep it specific and simple
-    const randomGoal = goals.length > 0 ? goals[Math.floor(Math.random() * goals.length)] : null;
-    
+    // Combine all goals into the context
     let goalContext = "";
-    if (randomGoal) {
-        goalContext = `Focus specifically on this goal: "${randomGoal.title}" which is due on ${randomGoal.targetDate}.`;
+    if (goals.length > 0) {
+        const goalDescriptions = goals.map(g => `"${g.title}" (Category: ${g.categories.join(', ')})`).join('; ');
+        goalContext = `Integrate the energy of the following goals into one unified, powerful vision: ${goalDescriptions}.`;
     } else {
-        goalContext = "Focus on general success and wealth.";
+        goalContext = "Focus on general success, wealth, and high-performance living.";
     }
 
     const prompt = `
@@ -58,15 +57,16 @@ export const generateDailyAffirmation = async (
       ${goalContext}
       
       Generate a SINGLE, short, powerful, and concrete affirmation statement.
-      Structure it like this: "I will [achieve specific goal] by [specific action/trait]."
+      It must unify the user's multiple goals into one cohesive sentence about their future reality.
+      
+      Structure it like this: "I will [unified achievement] by [specific action/trait]." or "I am [identity] who [achieves X and Y]."
       
       Examples:
-      - "I will buy my Lamborghini by remaining disciplined and closing 5 deals today."
-      - "I will sign the contract by radiating confidence and preparation."
-      - "I will achieve perfect health by sticking to my workout routine."
+      - "I am the CEO of my reality, closing million-dollar deals and maintaining perfect health daily."
+      - "I will secure my dream home and travel the world by staying disciplined and focused on my business growth."
       
       Rules:
-      1. Keep it under 20 words.
+      1. Keep it under 25 words.
       2. No "Mystic" or flowery language. Be direct, grounded, and practical.
       3. Use "I will" or "I am".
       4. Do not use quotation marks.
@@ -245,7 +245,7 @@ export const generateLifestyleSimulation = async (
   }
 };
 
-export const generateLifestyleSuggestions = async (user: UserProfile): Promise<string[]> => {
+export const generateLifestyleSuggestions = async (user: UserProfile, goals: VisionGoal[]): Promise<string[]> => {
     try {
         if (!process.env.API_KEY) return [
             "Sitting in a private jet cabin reviewing contracts",
@@ -256,20 +256,35 @@ export const generateLifestyleSuggestions = async (user: UserProfile): Promise<s
         const age = getAge(user.dob);
         const gender = user.gender;
         const demographics = `${gender || 'person'} ${age ? `aged ${age}` : ''}`;
+        
+        let goalContext = "General Wealth and Freedom";
+        if (goals.length > 0) {
+            goalContext = goals.map(g => `Goal: ${g.title} (Area: ${g.categories.join(',')})`).join('; ');
+        }
 
         const prompt = `
-            Generate 4 distinct, ultra-luxurious, and visually stunning lifestyle scenarios for a vision board app.
-            Target Audience: A ${demographics}.
-            Theme: Wealth, Health, Freedom, and High Status.
+            Generate 4 distinct, ultra-luxurious, and vivid "reality shifting" fantasies/scenarios for a vision board app.
+            
+            User Profile: A ${demographics}.
+            User's Specific Manifestation Goals: ${goalContext}.
+            
+            Instructions:
+            1. Create specific scenarios that visualize the user HAVING ALREADY ACHIEVED these goals.
+            2. Mix in sensory details (texture, location, feeling).
+            3. Vary the settings (e.g., one home setting, one travel setting, one career moment).
+            4. Make them "Mystic Luxury" style.
             
             Output format: Just the descriptions, separated by a pipe symbol "|". 
-            Example: Driving a vintage convertible along the Amalfi Coast|Hosting a gala in a modern glass mansion
-            Keep descriptions concise (under 12 words each) but evocative.
+            Example: Signing the deed to the penthouse overlooking Central Park|Feeling the leather steering wheel of the new GT3 RS on the Autobahn
+            Keep descriptions concise (under 15 words each).
         `;
 
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
+            config: {
+                temperature: 1.2, // High creativity/randomness
+            }
         });
 
         const text = response.text?.trim() || "";

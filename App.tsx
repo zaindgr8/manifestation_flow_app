@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ManifestProvider, useManifest } from './context/ManifestContext';
 import { Onboarding } from './screens/Onboarding';
@@ -5,10 +6,25 @@ import { VisionWizard } from './screens/VisionWizard';
 import { Timeline } from './screens/Timeline';
 import { DailyAligner } from './screens/DailyAligner';
 import { LifestyleSimulator } from './screens/LifestyleSimulator';
-import { LayoutDashboard, Calendar, Wand2 } from 'lucide-react';
+import { AuthScreen } from './screens/Auth';
+import { LayoutDashboard, Calendar, Wand2, Loader2 } from 'lucide-react';
 
 const AppContent = () => {
-  const { currentScreen, setScreen, user } = useManifest();
+  const { currentScreen, setScreen, user, authUser, authLoading, isGuestMode } = useManifest();
+
+  // Loading State
+  if (authLoading) {
+      return (
+          <div className="min-h-screen bg-void flex items-center justify-center">
+              <Loader2 className="animate-spin text-gold w-8 h-8" />
+          </div>
+      );
+  }
+
+  // Auth Guard
+  if (!authUser && !isGuestMode) {
+      return <AuthScreen />;
+  }
 
   // Navigation Logic
   const renderScreen = () => {

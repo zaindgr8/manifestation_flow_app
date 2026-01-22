@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+
+import React, { useState, useRef, useEffect } from 'react';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -6,18 +7,24 @@ import { Camera, Upload, Sparkles, X, Aperture, Calendar as CalendarIcon, User }
 import { Gender } from '../types';
 
 export const Onboarding: React.FC = () => {
-  const { updateUser } = useManifest();
+  const { updateUser, user } = useManifest();
   const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [gender, setGender] = useState<Gender | ''>('');
-  const [dob, setDob] = useState('');
+  const [name, setName] = useState(user.name || '');
+  const [gender, setGender] = useState<Gender | ''>(user.gender || '');
+  const [dob, setDob] = useState(user.dob || '');
   
-  const [selfie, setSelfie] = useState<string | null>(null);
+  const [selfie, setSelfie] = useState<string | null>(user.selfieUrl || null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Sync with user context if it loads late (e.g. from Google Auth)
+  useEffect(() => {
+    if (user.name && !name) setName(user.name);
+    if (user.selfieUrl && !selfie) setSelfie(user.selfieUrl);
+  }, [user]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
