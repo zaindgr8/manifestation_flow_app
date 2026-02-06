@@ -1,22 +1,85 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { TouchableOpacity, Text, Animated, ActivityIndicator, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost';
+interface ButtonProps {
+  variant?: 'primary' | 'secondary' | 'ghost' | 'google';
   children: React.ReactNode;
+  onPress?: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  className?: string;
 }
 
-export const Button: React.FC<ButtonProps> = ({ variant = 'primary', className = '', children, ...props }) => {
-  const baseStyles = "w-full py-4 px-6 rounded-xl font-serif font-semibold tracking-wider transition-all duration-300 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed";
-  
-  const variants = {
-    primary: "bg-gradient-to-r from-gold to-gold-dim text-void shadow-[0_0_15px_rgba(244,224,185,0.3)] hover:shadow-[0_0_25px_rgba(244,224,185,0.5)]",
-    secondary: "border border-gold/30 text-gold hover:bg-gold/10 backdrop-blur-sm",
-    ghost: "text-gray-400 hover:text-white"
+export const Button: React.FC<ButtonProps> = ({ 
+  variant = 'primary', 
+  className = '', 
+  children, 
+  onPress, 
+  disabled,
+  loading 
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 20
+    }).start();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20
+    }).start();
+  };
+
+  const baseStyles = "w-full h-[56px] rounded-[16px] items-center justify-center overflow-hidden flex-row";
+  
+  const variants = {
+    primary: "bg-gold",
+    secondary: "border border-gold/30 bg-gold/5",
+    ghost: "bg-transparent",
+    google: "bg-white shadow-lg"
+  };
+
+  const textVariants = {
+    primary: "text-void font-bold uppercase tracking-[2px] text-sm",
+    secondary: "text-gold font-bold uppercase tracking-[1px] text-sm",
+    ghost: "text-gray-300 font-bold",
+    google: "text-black font-bold uppercase tracking-widest text-sm"
+  };
+
+  const isDisabled = disabled || loading;
+
   return (
-    <button className={`${baseStyles} ${variants[variant]} ${className}`} {...props}>
-      {children}
-    </button>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: '100%' }}>
+      <TouchableOpacity 
+        onPress={onPress} 
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        disabled={isDisabled}
+        className={`${baseStyles} ${variants[variant]} ${className} ${isDisabled ? 'opacity-50' : ''}`}
+        activeOpacity={1}
+      >
+        {loading ? (
+          <ActivityIndicator color={variant === 'primary' ? '#050505' : '#F4E0B9'} />
+        ) : (
+          <View className="flex-row items-center justify-center w-full px-6">
+            {typeof children === 'string' ? (
+              <Text className={textVariants[variant]}>
+                {children}
+              </Text>
+            ) : (
+              children
+            )}
+          </View>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 };

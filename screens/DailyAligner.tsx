@@ -1,31 +1,59 @@
 import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useManifest } from '../context/ManifestContext';
-import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Calendar as CalendarIcon, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles, Maximize2 } from 'lucide-react';
+import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles, Maximize2, LayoutDashboard } from 'lucide-react-native';
 import { Button } from '../components/Button';
+import { Input } from '../components/Input';
+import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export const DailyAligner: React.FC = () => {
-  const { user, rituals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, updateRitualTitle, gratitudeEntries, addGratitude } = useManifest();
+  const { user, rituals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, gratitudeEntries, addGratitude, loadingAffirmation } = useManifest();
   const [showConfetti, setShowConfetti] = useState(false);
-  const [loadingAffirmation, setLoadingAffirmation] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showFullPhoto, setShowFullPhoto] = useState(false);
-
-  // Add Ritual State
   const [isAdding, setIsAdding] = useState(false);
   const [newRitualTitle, setNewRitualTitle] = useState('');
-
-  // Edit Ritual State
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
-
-  // Gratitude State
   const [gratitudeInput, setGratitudeInput] = useState('');
-
-  // Settings State
   const [morningTime, setMorningTime] = useState(user.reminderTimes?.morning || '08:00');
   const [eveningTime, setEveningTime] = useState(user.reminderTimes?.evening || '20:00');
+  const [showMorningPicker, setShowMorningPicker] = useState(false);
+  const [showEveningPicker, setShowEveningPicker] = useState(false);
 
-  // Calculate progress
+  const formatTimeForDisplay = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const h = hours % 12 || 12;
+    const m = minutes.toString().padStart(2, '0');
+    return `${h}:${m} ${period}`;
+  };
+
+  const getTimeDate = (timeStr: string) => {
+    const d = new Date();
+    const [h, m] = timeStr.split(':').map(Number);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+
+  const onTimeChange = (type: 'morning' | 'evening', event: any, selectedDate?: Date) => {
+    // Android: dismiss on any selection or cancel
+    if (Platform.OS === 'android') {
+      setShowMorningPicker(false);
+      setShowEveningPicker(false);
+    }
+
+    if (selectedDate) {
+      const h = selectedDate.getHours().toString().padStart(2, '0');
+      const m = selectedDate.getMinutes().toString().padStart(2, '0');
+      const timeStr = `${h}:${m}`;
+      if (type === 'morning') {
+        setMorningTime(timeStr);
+      } else {
+        setEveningTime(timeStr);
+      }
+    }
+  };
+
   const completedCount = rituals.filter(r => r.isCompleted).length;
   const progress = rituals.length > 0 ? (completedCount / rituals.length) * 100 : 0;
   const isAllComplete = rituals.length > 0 && completedCount === rituals.length;
@@ -33,47 +61,21 @@ export const DailyAligner: React.FC = () => {
   useEffect(() => {
     if (isAllComplete) {
       setShowConfetti(true);
-      const timer = setTimeout(() => setShowConfetti(false), 5000);
-      return () => clearTimeout(timer);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => setShowConfetti(false), 5000);
     }
   }, [isAllComplete]);
 
-  // Check if we need to force a refresh based on time vs current affirmation type
-  // Triggered on mount if scheduled. 
-  useEffect(() => {
-     if (user.hasSetSchedule && !affirmation.text) {
-        refreshAffirmation();
-     }
-  }, [user.hasSetSchedule]);
-
   const handleRefreshAffirmation = async () => {
-    setLoadingAffirmation(true);
-    await refreshAffirmation(affirmation.type);
-    setLoadingAffirmation(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await refreshAffirmation();
   };
 
   const saveSettings = () => {
-    updateUser({
-        reminderTimes: { morning: morningTime, evening: eveningTime },
-        hasSetSchedule: true
-    });
-    
-    if ("Notification" in window) {
-      Notification.requestPermission().then((permission) => {
-        if (permission === "granted") {
-          new Notification("ManifestFlow Calendar", {
-            body: `Affirmations scheduled for ${morningTime} and ${eveningTime}.`,
-          });
-        }
-      });
-    }
-    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    updateUser({ reminderTimes: { morning: morningTime, evening: eveningTime }, hasSetSchedule: true });
     setShowSettings(false);
-    refreshAffirmation(); // Refresh to match new schedule immediately
-  };
-
-  const handleAcknowledge = () => {
-      acknowledgeAffirmation();
+    refreshAffirmation();
   };
 
   const handleAddRitual = () => {
@@ -81,6 +83,7 @@ export const DailyAligner: React.FC = () => {
       addRitual(newRitualTitle.trim());
       setNewRitualTitle('');
       setIsAdding(false);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
@@ -88,353 +91,279 @@ export const DailyAligner: React.FC = () => {
     if (gratitudeInput.trim()) {
         addGratitude(gratitudeInput.trim());
         setGratitudeInput('');
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   };
 
-  const startEditing = (id: string, currentTitle: string) => {
-    setEditingId(id);
-    setEditingTitle(currentTitle);
-  };
-
-  const saveEditing = () => {
-    if (editingId && editingTitle.trim()) {
-      updateRitualTitle(editingId, editingTitle.trim());
-      setEditingId(null);
-      setEditingTitle('');
-    }
-  };
-
-  // Filter todays gratitude
   const todaysGratitude = gratitudeEntries.filter(g => {
     const d = new Date(g.createdAt);
     const today = new Date();
-    return d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear();
+    return d.toDateString() === today.toDateString();
   });
 
   return (
-    <div className="min-h-screen bg-void pb-24 px-6 pt-16 relative overflow-x-hidden">
-      {/* Confetti Overlay */}
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-gold/10 animate-pulse"></div>
-            <div className="bg-surface/90 backdrop-blur-xl p-8 rounded-2xl border border-gold text-center animate-fade-in shadow-[0_0_50px_rgba(244,224,185,0.2)]">
-                <h2 className="text-2xl font-serif text-gold mb-2">Manifestation Strengthened</h2>
-                <p className="text-white/70">Your actions are aligning with your reality.</p>
-            </div>
-        </div>
-      )}
+    <View className="flex-1 bg-void">
+      <ScrollView 
+        className="flex-1" 
+        contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20, paddingTop: 64 }}
+      >
+        {/* Header */}
+        <View className="flex-row items-center justify-between mb-10">
+           <View className="flex-row items-center gap-4">
+              <View className="w-14 h-14 rounded-full border-2 border-gold/30 p-1">
+                  {user.selfieUrl ? (
+                    <View className="w-full h-full rounded-full overflow-hidden">
+                      <Image source={{ uri: user.selfieUrl }} className="w-full h-full" />
+                    </View>
+                  ) : (
+                    <View className="w-full h-full rounded-full bg-surface items-center justify-center">
+                      <Sparkles size={20} color="#F4E0B9" />
+                    </View>
+                  )}
+              </View>
+              <View>
+                  <Text className="text-[10px] text-gold font-black uppercase tracking-[3px] mb-1">Welcome Home</Text>
+                  <Text className="text-2xl font-black text-white tracking-tighter">{user.name.split(' ')[0]}</Text>
+              </View>
+           </View>
+           <TouchableOpacity 
+             onPress={() => {
+               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+               setShowSettings(true);
+             }} 
+             className="w-12 h-12 rounded-2xl bg-surface/50 border border-white/10 items-center justify-center"
+           >
+             <Settings size={22} color="#9CA3AF" />
+           </TouchableOpacity>
+        </View>
 
-      {/* Full Size Photo Modal */}
-      {showFullPhoto && user.selfieUrl && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 animate-fade-in p-4">
-             <button 
-                onClick={() => setShowFullPhoto(false)} 
-                className="absolute top-4 right-4 p-2 bg-white/10 rounded-full text-white hover:bg-white/20 z-50"
-             >
-                <X size={24} />
-             </button>
-             <div className="relative max-w-full max-h-full rounded-2xl overflow-hidden shadow-2xl border border-gold/30">
-                 <img src={user.selfieUrl} alt="Identity Anchor" className="max-h-[85vh] w-auto object-contain" />
-                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 text-center">
-                    <p className="text-gold font-serif text-lg">Identity Anchor</p>
-                 </div>
-             </div>
-        </div>
-      )}
+        {/* Affirmation Card */}
+        <View className="bg-surface/40 rounded-[24px] border border-white/5 overflow-hidden mb-10 shadow-2xl">
+           <View className="p-6">
+              <View className="flex-row justify-between items-center mb-8">
+                 <View className="flex-row items-center gap-2">
+                   <View className="w-1.5 h-1.5 rounded-full bg-gold shadow-lg shadow-gold/50" />
+                   <Text className="text-[10px] tracking-[2px] text-gold font-bold uppercase">QUANTUM PROGRAMMING</Text>
+                 </View>
+                 <TouchableOpacity onPress={handleRefreshAffirmation} className="bg-white/5 p-2 rounded-[12px] border border-white/10 active:scale-90">
+                   {loadingAffirmation ? <ActivityIndicator size="small" color="#F4E0B9" /> : <RefreshCw size={14} color="#6B7280" />}
+                 </TouchableOpacity>
+              </View>
+              <Text className="text-2xl font-black italic text-white/95 leading-[42px] tracking-tight mb-10 text-center px-4">"{affirmation.text}"</Text>
+              
+              <View className="items-center">
+                  {affirmation.isAcknowledged ? (
+                    <BlurView intensity={30} tint="light" className="px-6 py-3 rounded-full border border-gold/40 overflow-hidden flex-row items-center gap-2">
+                      <CheckCircle2 size={16} color="#F4E0B9" />
+                      <Text className="text-gold-bright text-xs font-bold uppercase tracking-widest">Quantum State Locked</Text>
+                    </BlurView>
+                  ) : (
+                  <Button 
+                    onPress={async () => {
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        await acknowledgeAffirmation();
+                    }}
+                    loading={loadingAffirmation}
+                  >
+                    <View className="flex-row items-center gap-2">
+                        <Sparkles size={16} color="#050505" />
+                        <Text className="text-void font-bold uppercase tracking-widest text-xs">I Affirm This</Text>
+                    </View>
+                  </Button>
+                )}
+              </View>
+           </View>
+        </View>
 
-      {/* Settings Modal */}
-      {(showSettings || !user.hasSetSchedule) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm animate-fade-in">
-           <div className="bg-surface w-full max-w-sm rounded-2xl border border-white/10 p-6 shadow-2xl relative">
-              {user.hasSetSchedule && (
-                <button onClick={() => setShowSettings(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
-                    <X size={20} />
-                </button>
+        {/* Frequency Tuner (Gratitude) */}
+        <View className="mb-10">
+            <View className="flex-row items-center gap-2 mb-5 ml-1">
+              <Heart size={18} color="#F4E0B9" />
+              <Text className="text-[12px] font-bold text-white/80 uppercase tracking-[2px]">Frequency Tuner</Text>
+            </View>
+            <View className="bg-surface/20 border border-white/5 rounded-[24px] p-6 shadow-xl">
+               {todaysGratitude.length < 3 ? (
+                  <View className="flex-row items-center gap-3 bg-void/30 px-5 py-4 rounded-[16px] border border-white/5">
+                      <TextInput 
+                        value={gratitudeInput} 
+                        onChangeText={setGratitudeInput} 
+                        placeholder={`I am grateful for...`} 
+                        placeholderTextColor="#ffffff66" 
+                        className="flex-1 text-[15px] text-white font-semibold p-0" 
+                      />
+                      <TouchableOpacity 
+                        onPress={handleAddGratitude} 
+                        disabled={!gratitudeInput.trim()}
+                        className="bg-gold/10 p-2.5 rounded-[12px] border border-gold/20 active:scale-90"
+                      >
+                        <Plus size={20} color="#F4E0B9" />
+                      </TouchableOpacity>
+                  </View>
+               ) : (
+                  <View className="items-center py-2">
+                     <Text className="text-gold-bright text-xs font-bold uppercase tracking-[3px]">Frequency Raised</Text>
+                  </View>
+               )}
+               <View className="mt-6 gap-3">
+                   {todaysGratitude.map((g) => (
+                      <BlurView key={g.id} intensity={10} tint="light" className="flex-row items-center gap-3 px-5 py-4 rounded-[16px] border border-white/5 overflow-hidden">
+                        <Heart size={10} color="#F4E0B9" fill="#F4E0B9" />
+                        <Text className="text-sm text-gray-300 font-medium leading-5">{g.text}</Text>
+                      </BlurView>
+                   ))}
+               </View>
+            </View>
+        </View>
+
+        {/* Rituals */}
+        <View className="mb-10">
+          <View className="flex-row justify-between items-center mb-5 ml-1">
+              <View className="flex-row items-center gap-2">
+                  <LayoutDashboard size={18} color="#F4E0B9" />
+                  <Text className="text-[12px] font-bold text-white/80 uppercase tracking-[2px]">Daily Rituals</Text>
+              </View>
+              <View className="flex-row items-center gap-3">
+                  <TouchableOpacity 
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setIsAdding(!isAdding);
+                    }}
+                    className="bg-white/5 p-2 rounded-[10px] border border-white/10"
+                  >
+                    <Plus size={18} color="#F4E0B9" />
+                  </TouchableOpacity>
+                  <Text className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{completedCount}/{rituals.length}</Text>
+              </View>
+          </View>
+          
+          <View className="h-1.5 w-full bg-surface/50 rounded-full mb-8 overflow-hidden">
+             <View className="h-full bg-gold shadow-lg shadow-gold/50" style={{ width: `${progress}%` }} />
+          </View>
+
+          <View className="gap-3">
+              {isAdding && (
+                <View className="mb-4">
+                  <Input 
+                    value={newRitualTitle} 
+                    onChangeText={setNewRitualTitle} 
+                    placeholder="Lock in new ritual..." 
+                    autoFocus 
+                  />
+                  <View className="flex-row gap-3 -mt-2">
+                     <TouchableOpacity onPress={handleAddRitual} className="flex-1 bg-gold h-12 rounded-[14px] items-center justify-center active:scale-95 transition-all">
+                        <Text className="text-void font-bold uppercase text-xs tracking-widest">Add Ritual</Text>
+                     </TouchableOpacity>
+                     <TouchableOpacity onPress={() => setIsAdding(false)} className="flex-1 bg-surface/50 h-12 rounded-[14px] items-center justify-center border border-white/10 active:scale-95 transition-all">
+                        <Text className="text-white/60 font-bold uppercase text-xs tracking-widest">Cancel</Text>
+                     </TouchableOpacity>
+                  </View>
+                </View>
               )}
               
-              <h2 className="text-xl font-serif text-white mb-6 flex items-center gap-2">
-                <Bell size={18} className="text-gold" /> 
-                {user.hasSetSchedule ? "Affirmation Schedule" : "Set Your Rhythm"}
-              </h2>
+              {rituals.length === 0 && !isAdding ? (
+                 <View className="py-12 items-center justify-center opacity-60">
+                    <Text className="text-gray-400 text-xs font-bold uppercase tracking-[2px]">No Active Rituals</Text>
+                 </View>
+              ) : isAllComplete ? (
+                 <View className="bg-surface/30 p-10 rounded-[32px] border border-gold/30 items-center justify-center overflow-hidden mb-4 shadow-2xl">
+                      <View className="w-20 h-20 rounded-full bg-gold items-center justify-center shadow-2xl shadow-gold/40 mb-6">
+                          <CheckCircle2 size={40} color="#050505" strokeWidth={3} />
+                      </View>
+                      <Text className="text-2xl font-black text-white text-center tracking-tighter mb-2">Universe Aligned</Text>
+                      <Text className="text-gray-400 text-xs font-bold uppercase tracking-widest text-center leading-5 px-4">Your frequency is optimized for high-performance manifestation</Text>
+                 </View>
+              ) : rituals.map(ritual => (
+                  <TouchableOpacity 
+                    key={ritual.id} 
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      toggleRitual(ritual.id);
+                    }} 
+                    onLongPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                      deleteRitual(ritual.id);
+                    }}
+                    className={`flex-row items-center gap-5 px-5 py-4 rounded-[20px] border ${ritual.isCompleted ? 'bg-gold/10 border-gold/30 opacity-60' : 'bg-surface/40 border-white/10 shadow-sm'}`}
+                  >
+                      <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${ritual.isCompleted ? 'bg-gold border-gold' : 'border-gold/30'}`}>
+                          {ritual.isCompleted && <CheckCircle2 size={14} color="#050505" strokeWidth={4} />}
+                      </View>
+                      <Text className={`flex-1 text-base font-bold tracking-tight ${ritual.isCompleted ? 'text-gold opacity-60 line-through' : 'text-white'}`}>
+                        {ritual.title}
+                      </Text>
+                      <TouchableOpacity 
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+                          deleteRitual(ritual.id);
+                        }}
+                        className="opacity-20"
+                      >
+                        <Trash2 size={16} color="#ffffff" />
+                      </TouchableOpacity>
+                  </TouchableOpacity>
+              ))}
+          </View>
+        </View>
+      </ScrollView>
 
-              <div className="space-y-6">
-                <div>
-                   <label className="flex items-center gap-2 text-sm text-gold/80 mb-2">
-                      <Sun size={14} /> Morning Intention
-                   </label>
-                   <input 
-                     type="time" 
-                     value={morningTime}
-                     onChange={(e) => setMorningTime(e.target.value)}
-                     className="w-full bg-void border border-white/10 rounded-xl p-3 text-white focus:border-gold/50 outline-none"
-                   />
-                </div>
-                <div>
-                   <label className="flex items-center gap-2 text-sm text-gold/80 mb-2">
-                      <Moon size={14} /> Evening Gratitude
-                   </label>
-                   <input 
-                     type="time" 
-                     value={eveningTime}
-                     onChange={(e) => setEveningTime(e.target.value)}
-                     className="w-full bg-void border border-white/10 rounded-xl p-3 text-white focus:border-gold/50 outline-none"
-                   />
-                </div>
-                
-                <div className="p-3 bg-white/5 rounded-lg flex items-start gap-3">
-                   <CalendarIcon size={16} className="text-gold mt-1" />
-                   <p className="text-xs text-gray-400">
-                     Affirmations will appear based on these times. {user.hasSetSchedule ? '' : 'Please define when you wake and sleep.'}
-                   </p>
-                </div>
-
-                <Button onClick={saveSettings}>Confirm Rhythm</Button>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-         <div className="flex items-center gap-4">
-            <div 
-                className="w-12 h-12 rounded-full border border-gold/30 p-0.5 cursor-pointer relative group"
-                onClick={() => setShowFullPhoto(true)}
-            >
-                {user.selfieUrl ? (
-                    <>
-                        <img src={user.selfieUrl} className="w-full h-full rounded-full object-cover" alt="User" />
-                        <div className="absolute inset-0 bg-black/30 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Maximize2 size={14} className="text-white" />
-                        </div>
-                    </>
-                ) : (
-                    <div className="w-full h-full rounded-full bg-surface" />
-                )}
-            </div>
-            <div>
-                <h1 className="text-2xl font-serif text-white">Good {new Date().getHours() < 12 ? 'Morning' : 'Evening'}, {user.name.split(' ')[0]}</h1>
-                <div className="flex items-center gap-2">
-                   <p className="text-xs text-gray-400">Align your frequency.</p>
-                   {user.affirmationStreak > 0 && (
-                       <div className="flex items-center gap-1 bg-gold/10 px-1.5 py-0.5 rounded-full border border-gold/20">
-                          <Flame size={10} className="text-gold" fill="currentColor" />
-                          <span className="text-[10px] text-gold font-bold">{user.affirmationStreak} Day Streak</span>
-                       </div>
+      {/* Settings Modal - Optimized Time Picker */}
+      <Modal visible={showSettings || !user.hasSetSchedule} animationType="fade" transparent={true} statusBarTranslucent>
+        <BlurView intensity={80} tint="dark" className="flex-1 justify-center p-8">
+           <View className="bg-surface/90 rounded-[32px] border border-white/10 p-8 shadow-2xl overflow-hidden">
+              <Text className="text-3xl font-black text-white mb-2 tracking-tighter">Your Rhythm</Text>
+              <Text className="text-gray-400 text-sm mb-10 font-medium">Synchronize your life with the universe.</Text>
+              
+              <View className="gap-8 mb-12">
+                <View>
+                   <Text className="text-[10px] text-gold/60 font-black uppercase tracking-[2px] mb-4 ml-1">Morning Intention</Text>
+                   <TouchableOpacity 
+                     onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowMorningPicker(!showMorningPicker);
+                        setShowEveningPicker(false);
+                     }}
+                     className={`bg-void/50 border ${showMorningPicker ? 'border-gold/50' : 'border-white/10'} rounded-[24px] h-20 items-center justify-center shadow-inner active:scale-95 transition-transform`}
+                   >
+                     <Text className="text-3xl font-black text-white tracking-widest">{formatTimeForDisplay(morningTime)}</Text>
+                   </TouchableOpacity>
+                   {showMorningPicker && (
+                     <DateTimePicker
+                       value={getTimeDate(morningTime)}
+                       mode="time"
+                       is24Hour={false}
+                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                       onChange={(event, date) => onTimeChange('morning', event, date)}
+                     />
                    )}
-                </div>
-            </div>
-         </div>
-         <button 
-           onClick={() => setShowSettings(true)}
-           className="p-2 rounded-full hover:bg-white/5 text-gray-400 hover:text-gold transition-colors"
-         >
-            <Settings size={20} />
-         </button>
-      </div>
+                </View>
 
-      {/* Gratitude Frequency Tuner */}
-      <div className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-             <Heart size={16} className="text-gold" />
-             <h2 className="text-sm font-serif text-white">Frequency Tuner</h2>
-          </div>
-          <div className="bg-surface/50 border border-white/5 rounded-2xl p-4">
-             {todaysGratitude.length < 3 ? (
-                <div className="flex gap-2">
-                    <input 
-                       type="text"
-                       value={gratitudeInput}
-                       onChange={(e) => setGratitudeInput(e.target.value)}
-                       onKeyDown={(e) => e.key === 'Enter' && handleAddGratitude()}
-                       placeholder={`I am grateful for... (${3 - todaysGratitude.length} remaining)`}
-                       className="flex-1 bg-transparent text-sm text-white placeholder-white/20 outline-none"
-                    />
-                    <button onClick={handleAddGratitude} disabled={!gratitudeInput.trim()} className="text-gold disabled:opacity-30">
-                        <Plus size={18} />
-                    </button>
-                </div>
-             ) : (
-                <div className="text-center py-1">
-                    <p className="text-xs text-gold tracking-widest uppercase flex items-center justify-center gap-2">
-                        <Sparkles size={12} /> Frequency Raised
-                    </p>
-                </div>
-             )}
-             
-             {todaysGratitude.length > 0 && (
-                 <div className="mt-3 space-y-2">
-                     {todaysGratitude.map((g) => (
-                         <div key={g.id} className="text-xs text-gray-400 flex items-center gap-2 animate-fade-in">
-                             <div className="w-1 h-1 rounded-full bg-gold"></div>
-                             {g.text}
-                         </div>
-                     ))}
-                 </div>
-             )}
-          </div>
-      </div>
-
-      {/* Affirmation Card */}
-      <div className="relative bg-gradient-to-br from-[#1A1A2E] to-midnight p-6 rounded-2xl border border-white/5 mb-8 overflow-hidden group">
-         <div className="absolute -top-10 -right-10 w-32 h-32 bg-gold/10 rounded-full blur-3xl group-hover:bg-gold/20 transition-all"></div>
-         
-         <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-2">
-                {affirmation.type === 'MORNING' ? <Sun size={12} className="text-gold" /> : <Moon size={12} className="text-gold" />}
-                <span className="text-[10px] tracking-[0.2em] text-gold uppercase">
-                    {affirmation.type} Programming
-                </span>
-            </div>
-            <button 
-                onClick={handleRefreshAffirmation} 
-                className={`text-white/30 hover:text-gold transition-colors ${loadingAffirmation ? 'animate-spin' : ''}`}
-                title="Regenerate Affirmation"
-            >
-                <RefreshCw size={14} />
-            </button>
-         </div>
-         
-         <p className="text-xl font-serif leading-relaxed text-white/90 italic min-h-[3.5rem] mb-6">
-            {loadingAffirmation ? (
-                <span className="opacity-50 text-base not-italic font-sans">Receiving download...</span>
-            ) : (
-                `"${affirmation.text}"`
-            )}
-         </p>
-         
-         {/* Acknowledgement Action */}
-         <div className="flex justify-end items-center gap-4 border-t border-white/5 pt-4">
-             {affirmation.isAcknowledged ? (
-                 <div className="flex items-center gap-2 text-gold text-xs uppercase tracking-widest animate-fade-in">
-                     <CheckCircle2 size={14} /> Frequency Locked
-                 </div>
-             ) : (
-                 <button 
-                   onClick={handleAcknowledge}
-                   className="flex items-center gap-2 px-4 py-2 bg-gold/10 hover:bg-gold/20 border border-gold/30 rounded-full text-gold text-xs uppercase tracking-widest transition-all active:scale-95"
-                 >
-                     <Check size={14} /> I Affirm This
-                 </button>
-             )}
-         </div>
-      </div>
-
-      {/* Daily Rituals */}
-      <div>
-        <div className="flex justify-between items-end mb-6">
-            <div className="flex items-center gap-2">
-                <h2 className="text-lg font-serif text-white">Required Actions</h2>
-                <button 
-                    onClick={() => setIsAdding(true)} 
-                    className="p-1 rounded-full bg-white/5 hover:bg-white/10 text-gold transition-colors"
-                >
-                    <Plus size={16} />
-                </button>
-            </div>
-            <span className="text-xs text-gray-500">{completedCount}/{rituals.length} Completed</span>
-        </div>
-        
-        {/* Progress Bar */}
-        <div className="h-1 w-full bg-surface rounded-full mb-6 overflow-hidden">
-            <div 
-                className="h-full bg-gold transition-all duration-1000 ease-out" 
-                style={{ width: `${progress}%` }}
-            ></div>
-        </div>
-
-        <div className="space-y-4">
-            {/* Add New Ritual Input */}
-            {isAdding && (
-                <div className="flex items-center gap-3 p-4 rounded-xl border border-gold/30 bg-surface/50 animate-fade-in">
-                    <input 
-                        type="text" 
-                        value={newRitualTitle}
-                        onChange={(e) => setNewRitualTitle(e.target.value)}
-                        placeholder="What is your new daily ritual?"
-                        className="flex-1 bg-transparent text-white text-sm outline-none placeholder-white/20"
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddRitual()}
-                    />
-                    <button onClick={handleAddRitual} className="text-gold hover:text-white transition-colors">
-                        <Check size={16} />
-                    </button>
-                    <button onClick={() => setIsAdding(false)} className="text-gray-500 hover:text-red-400 transition-colors">
-                        <X size={16} />
-                    </button>
-                </div>
-            )}
-
-            {rituals.length === 0 && !isAdding ? (
-                <div className="text-center py-8 text-gray-500 text-sm bg-surface/30 rounded-xl border border-dashed border-white/5">
-                    No rituals set. Create a goal or add a custom action.
-                </div>
-            ) : (
-                rituals.map(ritual => (
-                    <div 
-                        key={ritual.id}
-                        className={`group relative flex items-center gap-4 p-4 rounded-xl border transition-all duration-300 ${
-                            ritual.isCompleted 
-                            ? 'bg-gold/10 border-gold/30' 
-                            : 'bg-surface/50 border-white/5 hover:border-white/10'
-                        }`}
-                    >
-                        {editingId === ritual.id ? (
-                            <div className="flex-1 flex items-center gap-3">
-                                <input 
-                                    type="text" 
-                                    value={editingTitle}
-                                    onChange={(e) => setEditingTitle(e.target.value)}
-                                    className="flex-1 bg-transparent text-white text-sm outline-none border-b border-gold/50 pb-1"
-                                    autoFocus
-                                    onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                                />
-                                <button onClick={saveEditing} className="text-gold">
-                                    <Save size={14} />
-                                </button>
-                                <button onClick={() => setEditingId(null)} className="text-gray-500">
-                                    <X size={14} />
-                                </button>
-                            </div>
-                        ) : (
-                            <>
-                                <div 
-                                    onClick={() => toggleRitual(ritual.id)}
-                                    className={`cursor-pointer w-6 h-6 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${
-                                    ritual.isCompleted ? 'bg-gold border-gold' : 'border-gray-500'
-                                }`}>
-                                    {ritual.isCompleted && <Check size={14} className="text-void" />}
-                                </div>
-                                
-                                <span 
-                                    onClick={() => toggleRitual(ritual.id)}
-                                    className={`flex-1 text-sm cursor-pointer ${ritual.isCompleted ? 'text-gold line-through opacity-70' : 'text-gray-200'}`}
-                                >
-                                    {ritual.title}
-                                </span>
-
-                                {/* Action Buttons (Visible on hover/group-hover) */}
-                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button 
-                                        onClick={() => startEditing(ritual.id, ritual.title)}
-                                        className="text-gray-500 hover:text-gold p-1"
-                                    >
-                                        <Edit2 size={14} />
-                                    </button>
-                                    <button 
-                                        onClick={() => deleteRitual(ritual.id)}
-                                        className="text-gray-500 hover:text-red-400 p-1"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                ))
-            )}
-        </div>
-      </div>
-    </div>
+                <View>
+                   <Text className="text-[10px] text-gold/60 font-black uppercase tracking-[2px] mb-4 ml-1">Evening Gratitude</Text>
+                   <TouchableOpacity 
+                     onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowEveningPicker(!showEveningPicker);
+                        setShowMorningPicker(false);
+                     }}
+                     className={`bg-void/50 border ${showEveningPicker ? 'border-gold/50' : 'border-white/10'} rounded-[24px] h-20 items-center justify-center shadow-inner active:scale-95 transition-transform`}
+                   >
+                     <Text className="text-3xl font-black text-white tracking-widest">{formatTimeForDisplay(eveningTime)}</Text>
+                   </TouchableOpacity>
+                   {showEveningPicker && (
+                     <DateTimePicker
+                       value={getTimeDate(eveningTime)}
+                       mode="time"
+                       is24Hour={false}
+                       display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                       onChange={(event, date) => onTimeChange('evening', event, date)}
+                     />
+                   )}
+                </View>
+              </View>
+              <Button onPress={saveSettings}>Lock In Frequency</Button>
+           </View>
+        </BlurView>
+      </Modal>
+    </View>
   );
 };

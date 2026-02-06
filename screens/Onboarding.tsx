@@ -1,10 +1,14 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Platform, ImageBackground } from 'react-native';
+import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Camera, Upload, Sparkles, X, Aperture, Calendar as CalendarIcon, User } from 'lucide-react';
+import { Camera, Upload, Sparkles, X, Aperture, ChevronRight, User as UserIcon } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Gender } from '../types';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 
 export const Onboarding: React.FC = () => {
   const { updateUser, user } = useManifest();
@@ -12,68 +16,53 @@ export const Onboarding: React.FC = () => {
   const [name, setName] = useState(user.name || '');
   const [gender, setGender] = useState<Gender | ''>(user.gender || '');
   const [dob, setDob] = useState(user.dob || '');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   
   const [selfie, setSelfie] = useState<string | null>(user.selfieUrl || null);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Sync with user context if it loads late (e.g. from Google Auth)
   useEffect(() => {
     if (user.name && !name) setName(user.name);
     if (user.selfieUrl && !selfie) setSelfie(user.selfieUrl);
   }, [user]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      setSelfie(url);
+  const pickImage = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setSelfie(result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
-  const startCamera = async () => {
-    try {
-      setIsCameraOpen(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error("Error accessing camera:", err);
-      alert("Could not access camera. Please upload a file instead.");
-      setIsCameraOpen(false);
+  const takePhoto = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (permissionResult.granted === false) {
+      alert("You've refused to allow this app to access your camera!");
+      return;
     }
-  };
 
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsCameraOpen(false);
-  };
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
 
-  const takePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      
-      if (context) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/png');
-        setSelfie(dataUrl);
-        stopCamera();
-      }
+    if (!result.canceled) {
+      setSelfie(result.assets[0].uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
   const finishOnboarding = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     updateUser({ 
         name, 
         gender: gender as Gender,
@@ -84,139 +73,170 @@ export const Onboarding: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center animate-fade-in relative overflow-hidden">
-      {/* Background Elements */}
-      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-midnight to-void -z-10"></div>
-      <div className="absolute top-10 right-10 w-64 h-64 bg-gold/5 rounded-full blur-[100px] animate-pulse-slow"></div>
+    <ScrollView 
+        contentContainerStyle={{ flexGrow: 1 }} 
+        className="bg-void"
+        showsVerticalScrollIndicator={false}
+    >
+      <View className="flex-1 items-center justify-center p-8 text-center">
+        {/* Ambient background blur */}
+        <View className="absolute top-[-50px] right-[-50px] w-80 h-80 bg-gold/10 rounded-full blur-[100px]"></View>
+        <View className="absolute bottom-[-100px] left-[-50px] w-96 h-96 bg-gold/5 rounded-full blur-[120px]"></View>
 
-      <div className="max-w-md w-full space-y-8 z-10">
-        <div className="flex justify-center mb-6">
-          <Sparkles className="w-12 h-12 text-gold animate-float" />
-        </div>
+        <View className="w-full max-w-md">
+          <View className="items-center mb-12">
+            <View className="w-16 h-16 rounded-[20px] bg-surface border border-gold/20 items-center justify-center shadow-2xl shadow-gold/20 mb-4">
+                <Sparkles size={32} color="#F4E0B9" />
+            </View>
+            <View className="flex-row items-center gap-1.5">
+                {[1, 2].map(s => (
+                    <View key={s} className={`h-1 rounded-full ${step === s ? 'w-8 bg-gold' : 'w-2 bg-white/10'}`} />
+                ))}
+            </View>
+          </View>
 
-        {step === 1 && (
-          <div className="space-y-6 animate-fade-in">
-            <h1 className="text-4xl font-serif text-white">Who is manifesting?</h1>
-            <p className="text-gray-400 font-sans">Enter your details to tailor the energy.</p>
-            
-            <Input 
-              placeholder="Your Name" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-
-            <div className="flex gap-4">
-                <div className="w-full space-y-2">
-                    <label className="block text-sm text-gold/80 font-serif tracking-wide text-left ml-1">Gender</label>
-                    <select
-                        value={gender}
-                        onChange={(e) => setGender(e.target.value as Gender)}
-                        className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-4 text-white placeholder-white/20 focus:outline-none focus:border-gold/50 transition-all appearance-none"
-                    >
-                        <option value="" disabled>Select Gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Non-Binary">Non-Binary</option>
-                        <option value="Prefer not to say">Prefer not to say</option>
-                    </select>
-                </div>
-            </div>
-
-            <div className="w-full space-y-2">
-                <label className="block text-sm text-gold/80 font-serif tracking-wide text-left ml-1">Date of Birth</label>
-                <input 
-                    type="date"
-                    value={dob}
-                    onChange={(e) => setDob(e.target.value)}
-                    className="w-full bg-surface/50 border border-white/10 rounded-xl px-4 py-4 text-white placeholder-white/20 focus:outline-none focus:border-gold/50 transition-all"
+          {step === 1 && (
+            <View className="space-y-10">
+              <View>
+                <Text className="text-4xl font-black text-white text-center tracking-tighter">Who is manifesting?</Text>
+                <Text className="text-gold/40 text-[10px] font-black uppercase tracking-[3px] text-center mt-3 leading-relaxed">Tailor the quantum fields to your presence</Text>
+              </View>
+              
+              <View className="space-y-6">
+                <Input 
+                    label="YOUR IDENTITY"
+                    placeholder="E.g. Seeker of Truth" 
+                    value={name} 
+                    onChangeText={setName}
                 />
-            </div>
 
-            <Button disabled={!name || !gender || !dob} onClick={() => setStep(2)}>
-              Continue
-            </Button>
-          </div>
-        )}
+                <View className="space-y-3">
+                    <Text className="text-[10px] text-gold/60 font-black ml-1 uppercase tracking-widest">Quantum Gender</Text>
+                    <View className="bg-surface/30 border border-white/5 rounded-2xl flex-row flex-wrap p-1">
+                        {['Male', 'Female', 'Non-Binary', 'Other'].map((g) => (
+                            <TouchableOpacity 
+                                key={g}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setGender(g as Gender);
+                                }}
+                                className={`w-1/2 p-1`}
+                            >
+                                <View className={`py-3.5 items-center justify-center rounded-xl border ${gender === g ? 'bg-gold border-gold' : 'bg-transparent border-transparent'}`}>
+                                    <Text className={`text-[10px] font-black uppercase tracking-widest ${gender === g ? 'text-void' : 'text-gray-500'}`}>{g}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
 
-        {step === 2 && (
-          <div className="space-y-8 animate-fade-in">
-            <h1 className="text-3xl font-serif text-white">The Identity Shift</h1>
-            <p className="text-gray-400 font-sans">Capture your essence. We will use this to bridge your reality with your dreams.</p>
-            
-            {!isCameraOpen ? (
-              <div className="flex flex-col gap-4">
-                 <div 
-                  className="relative w-48 h-48 mx-auto rounded-full border-2 border-dashed border-gold/30 flex items-center justify-center overflow-hidden bg-surface/30 shadow-[0_0_30px_rgba(0,0,0,0.5)]"
+                <TouchableOpacity 
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setShowDatePicker(true);
+                    }}
+                    activeOpacity={0.7}
                 >
-                  {selfie ? (
-                    <img src={selfie} alt="Selfie" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex flex-col items-center text-gold/50">
-                      <Camera className="w-8 h-8 mb-2" />
-                      <span className="text-xs uppercase tracking-widest">No Image</span>
-                    </div>
-                  )}
-                </div>
+                    <View pointerEvents="none">
+                      <Input 
+                        label="Earthly Entry (DOB)"
+                        placeholder="Select Portal Date"
+                        value={dob}
+                        editable={false}
+                      />
+                    </View>
+                </TouchableOpacity>
+              </View>
 
-                <div className="grid grid-cols-2 gap-4 mt-4">
-                   <button 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center justify-center gap-2 py-3 bg-surface border border-white/10 rounded-xl hover:bg-surface/80 hover:border-gold/30 transition-all text-sm"
-                   >
-                      <Upload size={16} /> Upload
-                   </button>
-                   <button 
-                      onClick={startCamera}
-                      className="flex items-center justify-center gap-2 py-3 bg-gold/10 border border-gold/30 rounded-xl hover:bg-gold/20 hover:border-gold text-gold transition-all text-sm"
-                   >
-                      <Aperture size={16} /> Take Photo
-                   </button>
-                </div>
+              {showDatePicker && (
+                <BlurView intensity={20} tint="dark" className="rounded-[32px] overflow-hidden border border-white/5 p-4">
+                    <RNDateTimePicker
+                      value={dob ? new Date(dob) : new Date()}
+                      mode="date"
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={(event, date) => {
+                        if (Platform.OS === 'android') setShowDatePicker(false);
+                        if (date) {
+                          setDob(date.toISOString().split('T')[0]);
+                        }
+                      }}
+                      maximumDate={new Date()}
+                    />
+                    {Platform.OS === 'ios' && (
+                       <Button variant="secondary" onPress={() => setShowDatePicker(false)}>Confirm Alignment</Button>
+                    )}
+                </BlurView>
+              )}
 
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  accept="image/*"
-                  onChange={handleFileChange}
-                />
-              </div>
-            ) : (
-              // Camera View
-              <div className="relative w-full max-w-sm mx-auto aspect-square bg-black rounded-2xl overflow-hidden shadow-2xl border border-gold/50">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover transform scale-x-[-1]" />
-                <canvas ref={canvasRef} className="hidden" />
+              <Button 
+                disabled={!name || !gender || !dob} 
+                onPress={() => {
+                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                   setStep(2);
+                }}
+              >
+                Continue Alignment
+              </Button>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View className="space-y-10">
+              <View>
+                <Text className="text-4xl font-black text-white text-center tracking-tighter">The Identity Shift</Text>
+                <Text className="text-gold/40 text-[10px] font-black uppercase tracking-[3px] text-center mt-3 leading-relaxed">Capture your quantum essence</Text>
+              </View>
+              
+              <View className="items-center">
+                <View className="relative">
+                    <View className="w-56 h-56 rounded-full border-2 border-gold/20 items-center justify-center overflow-hidden bg-surface/30 shadow-2xl shadow-gold/20">
+                      {selfie ? (
+                        <Image source={{ uri: selfie }} className="w-full h-full" />
+                      ) : (
+                        <View className="items-center opacity-20">
+                          <UserIcon size={64} color="#F4E0B9" />
+                        </View>
+                      )}
+                    </View>
+                    <View className="absolute -bottom-2 -right-2 flex-row gap-2">
+                         <TouchableOpacity 
+                          onPress={takePhoto}
+                          className="w-14 h-14 bg-gold rounded-full items-center justify-center border-4 border-void shadow-xl"
+                       >
+                          <Camera size={20} color="#050505" /> 
+                       </TouchableOpacity>
+                       <TouchableOpacity 
+                          onPress={pickImage}
+                          className="w-14 h-14 bg-surface rounded-full items-center justify-center border-4 border-void shadow-xl border-white/5"
+                       >
+                          <Upload size={20} color="#F4E0B9" /> 
+                       </TouchableOpacity>
+                    </View>
+                </View>
+                <Text className="text-xs text-gray-500 text-center mt-12 px-8 leading-relaxed italic">
+                    We use your physical manifestation to project your highest self into the timeline.
+                </Text>
+              </View>
+
+              <View className="space-y-4">
+                <Button disabled={!selfie} onPress={finishOnboarding}>
+                   Enter ManifestFlow
+                </Button>
                 
-                <div className="absolute bottom-4 left-0 right-0 flex justify-center items-center gap-6">
-                  <button 
-                    onClick={stopCamera}
-                    className="p-3 bg-red-500/20 text-red-200 rounded-full backdrop-blur-sm border border-red-500/50"
-                  >
-                    <X size={20} />
-                  </button>
-                  <button 
-                    onClick={takePhoto}
-                    className="p-4 bg-white/20 rounded-full backdrop-blur-sm border-2 border-white hover:bg-white/40 transition-all"
-                  >
-                    <div className="w-4 h-4 bg-white rounded-full"></div>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <Button disabled={!selfie} onClick={finishOnboarding} className="mt-6">
-              Enter ManifestFlow
-            </Button>
-            
-            {!isCameraOpen && (
-              <button onClick={() => setStep(1)} className="text-sm text-gray-500 hover:text-gold transition-colors block mx-auto">
-                Back
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+                <TouchableOpacity 
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setStep(1);
+                    }} 
+                    className="py-4"
+                >
+                    <Text className="text-[10px] text-gray-600 font-bold uppercase tracking-widest text-center">Re-Align Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 };

@@ -2,7 +2,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { UserProfile, VisionGoal } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const ai = new GoogleGenAI({ apiKey: process.env.EXPO_PUBLIC_API_KEY as string });
+
 
 // Helper to convert blob/url to base64
 const urlToBase64 = async (url: string): Promise<string> => {
@@ -35,11 +36,10 @@ const getAge = (dob?: string) => {
 
 export const generateDailyAffirmation = async (
   user: UserProfile,
-  goals: VisionGoal[],
-  timeOfDay: 'MORNING' | 'EVENING'
+  goals: VisionGoal[]
 ): Promise<string> => {
   try {
-    if (!process.env.API_KEY) {
+    if (!process.env.EXPO_PUBLIC_API_KEY) {
       return `I will achieve my dreams through discipline and focus.`;
     }
 
@@ -47,29 +47,31 @@ export const generateDailyAffirmation = async (
     let goalContext = "";
     if (goals.length > 0) {
         const goalDescriptions = goals.map(g => `"${g.title}" (Category: ${g.categories.join(', ')})`).join('; ');
-        goalContext = `Integrate the energy of the following goals into one unified, powerful vision: ${goalDescriptions}.`;
+        goalContext = `The user is currently manifesting the following specific goals: ${goalDescriptions}.`;
     } else {
-        goalContext = "Focus on general success, wealth, and high-performance living.";
+        goalContext = "Focus on general abundance, purpose-driven success, and powerful manifestation.";
     }
 
     const prompt = `
-      The user's name is ${user.name}.
-      ${goalContext}
+      Name: ${user.name}
+      Goal Context: ${goalContext}
       
-      Generate a SINGLE, short, powerful, and concrete affirmation statement.
-      It must unify the user's multiple goals into one cohesive sentence about their future reality.
+      Create a unique, hyper-personalized, and high-impact affirmation.
+      This affirmation must feel like the user has ALREADY achieved their unified vision.
       
-      Structure it like this: "I will [unified achievement] by [specific action/trait]." or "I am [identity] who [achieves X and Y]."
+      Style:
+      - Raw, powerful identity-shifting language.
+      - Grounded and concrete (not "wishy-washy").
+      - Use "I am" or "I have" to signify current reality.
+      - Avoid cliché phrases.
       
-      Examples:
-      - "I am the CEO of my reality, closing million-dollar deals and maintaining perfect health daily."
-      - "I will secure my dream home and travel the world by staying disciplined and focused on my business growth."
-      
-      Rules:
-      1. Keep it under 25 words.
-      2. No "Mystic" or flowery language. Be direct, grounded, and practical.
-      3. Use "I will" or "I am".
-      4. Do not use quotation marks.
+      Format:
+      - Under 20 words.
+      - No quotes.
+      - No intro/outro text.
+      - Just the affirmation.
+
+      Objective: Unify their goals into a single sentence that defines their current state of success.
     `;
 
     const response = await ai.models.generateContent({
@@ -77,10 +79,10 @@ export const generateDailyAffirmation = async (
       contents: prompt,
     });
 
-    return response.text?.trim() || "I will manifest my goals through consistent daily action.";
+    return response.text?.trim() || "I am currently living my highest potential.";
   } catch (error) {
     console.error("Gemini Affirmation Error:", error);
-    return "I will manifest my goals through consistent daily action.";
+    return "I am currently living my highest potential.";
   }
 };
 
@@ -90,7 +92,7 @@ export const generateVisionBoardImage = async (
   user?: UserProfile
 ): Promise<string | null> => {
   try {
-    if (!process.env.API_KEY) return null;
+    if (!process.env.EXPO_PUBLIC_API_KEY) return null;
 
     let demographics = "";
     if (user) {
@@ -142,7 +144,7 @@ export const generatePersonalizedGoalImage = async (
   categories: string[]
 ): Promise<string | null> => {
   try {
-    if (!process.env.API_KEY) return null;
+    if (!process.env.EXPO_PUBLIC_API_KEY) return null;
 
     const base64Image = await urlToBase64(userSelfieUrl);
 
@@ -196,7 +198,7 @@ export const generateLifestyleSimulation = async (
   lifestyleDescription: string
 ): Promise<string | null> => {
   try {
-    if (!process.env.API_KEY) return null;
+    if (!process.env.EXPO_PUBLIC_API_KEY) return null;
 
     const base64Image = await urlToBase64(userSelfieUrl);
 
@@ -247,15 +249,15 @@ export const generateLifestyleSimulation = async (
 
 export const generateLifestyleSuggestions = async (user: UserProfile, goals: VisionGoal[]): Promise<string[]> => {
     try {
-        if (!process.env.API_KEY) return [
+        if (!process.env.EXPO_PUBLIC_API_KEY) return [
             "Sitting in a private jet cabin reviewing contracts",
             "Yoga on a yacht deck in the Mediterranean",
             "Walking a tiger on a leash in Dubai"
         ];
 
         const age = getAge(user.dob);
-        const gender = user.gender;
-        const demographics = `${gender || 'person'} ${age ? `aged ${age}` : ''}`;
+        // Gender is explicitly excluded for unisex/generic output
+        const demographics = `person ${age ? `aged ${age}` : ''}`;
         
         let goalContext = "General Wealth and Freedom";
         if (goals.length > 0) {
@@ -273,6 +275,7 @@ export const generateLifestyleSuggestions = async (user: UserProfile, goals: Vis
             2. Mix in sensory details (texture, location, feeling).
             3. Vary the settings (e.g., one home setting, one travel setting, one career moment).
             4. Make them "Mystic Luxury" style.
+            5. CRITICAL: Use gender-neutral language. Do NOT use pronouns like he/him/she/her. Focus on the first-person experience or generic "you".
             
             Output format: Just the descriptions, separated by a pipe symbol "|". 
             Example: Signing the deed to the penthouse overlooking Central Park|Feeling the leather steering wheel of the new GT3 RS on the Autobahn

@@ -4,6 +4,7 @@ import { UserProfile, VisionGoal, DailyRitual, AppScreen, AffirmationState, Life
 import { generateDailyAffirmation, generateVisionBoardImage, generatePersonalizedGoalImage } from '../services/geminiService';
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 import { 
   collection, 
   doc, 
@@ -26,6 +27,7 @@ interface ManifestContextType {
   gratitudeEntries: GratitudeEntry[];
   currentScreen: AppScreen;
   affirmation: AffirmationState;
+  loadingAffirmation: boolean;
   
   // Auth State
   authUser: User | null;
@@ -41,12 +43,16 @@ interface ManifestContextType {
   toggleRitual: (id: string) => void;
   addGratitude: (text: string) => void;
   setScreen: (screen: AppScreen) => void;
-  refreshAffirmation: (forceType?: 'MORNING' | 'EVENING') => Promise<void>;
-  acknowledgeAffirmation: () => void;
+  refreshAffirmation: () => Promise<void>;
+  acknowledgeAffirmation: () => Promise<void>;
   regenerateGoalImage: (goalId: string) => Promise<void>;
   personalizeGoalImage: (goalId: string, selfieUrl: string) => Promise<void>;
   addToLifestyleHistory: (shift: Omit<LifestyleShift, 'id' | 'createdAt'>) => void;
+  logout: () => Promise<void>;
   resetDay: () => void;
+  purchasePro: () => Promise<void>;
+  purchaseCredits: (pack: '10' | '50') => Promise<void>;
+  restorePurchases: () => Promise<void>;
 }
 
 const ManifestContext = createContext<ManifestContextType | undefined>(undefined);
@@ -58,7 +64,17 @@ const DEFAULT_USER_PROFILE: UserProfile = {
     hasSetSchedule: false,
     affirmationStreak: 0,
     lastAffirmationAck: null,
-    reminderTimes: { morning: '08:00', evening: '20:00' }
+    reminderTimes: { morning: '08:00', evening: '20:00' },
+    subscription: {
+        plan: 'FREE',
+        status: 'active',
+        renewsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+    },
+    credits: {
+        balance: 3, // 3 Free credits for everyone
+        lifetimeUsed: 0,
+        lastRefill: new Date().toISOString()
+    }
 };
 
 export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
@@ -76,10 +92,11 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   const [currentScreen, setCurrentScreen] = useState<AppScreen>('ONBOARDING');
   const [affirmation, setAffirmation] = useState<AffirmationState>({
     text: "Welcome to your new reality.",
-    type: 'MORNING',
+    type: 'MORNING', // Keeping for legacy/types but will move to general
     lastGenerated: null,
     isAcknowledged: false
   });
+  const [loadingAffirmation, setLoadingAffirmation] = useState(false);
 
   // 1. Auth Listener
   useEffect(() => {
@@ -129,7 +146,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     });
 
     // B. Goals Sync
-    const goalsQuery = query(collection(db, `users/${authUser.uid}/goals`), orderBy('createdAt', 'desc'));
+    const goalsQuery = query(collection(db, `users/${authUser.uid}/goals`), orderBy('targetDate', 'asc'));
     const unsubGoals = onSnapshot(goalsQuery, (snap) => {
         const loadedGoals = snap.docs.map(d => ({ id: d.id, ...d.data() } as VisionGoal));
         setGoals(loadedGoals);
@@ -165,6 +182,58 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     };
   }, [authUser]);
 
+  // 3. RevenueCat Subscription Listener
+  useEffect(() => {
+    const setupPurchases = async () => {
+        try {
+            const customerInfo = await Purchases.getCustomerInfo();
+            handleCustomerInfoUpdate(customerInfo);
+        } catch (e) {
+            console.log("Error fetching customer info (RevenueCat disabled in Expo Go)", e);
+        }
+    };
+
+    setupPurchases();
+
+    let listener: any;
+    try {
+        listener = Purchases.addCustomerInfoUpdateListener((info) => {
+            handleCustomerInfoUpdate(info);
+        });
+    } catch (e) {
+        console.warn("RevenueCat listeners not available.");
+    }
+
+    return () => {
+        if (listener && listener.remove) {
+            listener.remove();
+        }
+    };
+  }, [user.name]); // Re-run if user changes (mostly for initial sync)
+
+  const handleCustomerInfoUpdate = (info: CustomerInfo) => {
+      const isPro = typeof info.entitlements.active['pro_access'] !== 'undefined';
+      
+      if (isPro && user.subscription?.plan !== 'PRO') {
+          updateUser({
+              subscription: {
+                  plan: 'PRO',
+                  status: 'active',
+                  renewsAt: info.entitlements.active['pro_access'].expirationDate || new Date().toISOString()
+              }
+          });
+      } else if (!isPro && user.subscription?.plan === 'PRO') {
+          // Expired
+          updateUser({
+              subscription: {
+                  plan: 'FREE',
+                  status: 'expired',
+                  renewsAt: new Date().toISOString()
+              }
+          });
+      }
+  };
+
   // --- ACTIONS (Hybrid: Firestore or Local State) ---
 
   const enableGuestMode = () => setIsGuestMode(true);
@@ -186,6 +255,13 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   };
 
   const addGoalAndRitual = async (goalData: Omit<VisionGoal, 'id' | 'createdAt'>, ritualTitles: string[]) => {
+    // 1. Check Goal Limits
+    const isPro = user.subscription?.plan === 'PRO';
+    if (!isPro && goals.length >= 3) {
+        alert("You have reached the maximum of 3 goals on the Free plan. Upgrade to Manifestor Pro for unlimited goals.");
+        return;
+    }
+
     // Generate IDs locally for optimistic update (if complex, skip optimistic for add)
     // For Firestore, we let SDK generate ID or use a placeholder
     const timestamp = Date.now();
@@ -228,7 +304,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
             isCompleted: false,
             lastCompletedDate: null
         }));
-        setGoals(prev => [...prev, newGoal]);
+        setGoals(prev => [...prev, newGoal].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()));
         setRituals(prev => [...prev, ...newRituals]);
         
         generateVisionBoardImage(newGoal.title, newGoal.categories, user).then(img => {
@@ -292,6 +368,21 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   };
 
   const regenerateGoalImage = async (goalId: string) => {
+      // 1. Check Credits
+      if ((user.credits?.balance || 0) <= 0) {
+          alert("You have run out of Cosmic Credits. Top up to generate more imagery.");
+          return;
+      }
+      
+      // Deduct Credit Optimistically
+      updateUser({
+          credits: {
+              ...user.credits!,
+              balance: (user.credits?.balance || 0) - 1,
+              lifetimeUsed: (user.credits?.lifetimeUsed || 0) + 1
+          }
+      });
+
       // Set Loading UI
       setGoals(prev => prev.map(g => g.id === goalId ? { ...g, isRegeneratingImage: true } : g));
       
@@ -344,35 +435,129 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   // --- Non-DB Methods (UI Only) ---
   const setScreen = (screen: AppScreen) => setCurrentScreen(screen);
 
-  const refreshAffirmation = async (forceType?: 'MORNING' | 'EVENING') => {
+  const refreshAffirmation = async () => {
       if (!user.name) return;
-      // ... (Same logic as before for time calculation) ...
-      let type = forceType;
-      if (!type) {
-        const now = new Date();
-        const currentHour = now.getHours();
-        const eveningH = parseInt(user.reminderTimes.evening.split(':')[0]);
-        type = currentHour >= eveningH ? 'EVENING' : 'MORNING';
+      setLoadingAffirmation(true);
+      try {
+          const text = await generateDailyAffirmation(user, goals);
+          setAffirmation({
+              text,
+              type: 'MORNING', // Neutralized
+              lastGenerated: new Date().toDateString(),
+              isAcknowledged: false
+          });
+      } finally {
+          setLoadingAffirmation(false);
       }
-
-      const text = await generateDailyAffirmation(user, goals, type);
-      setAffirmation({
-          text,
-          type: type!,
-          lastGenerated: new Date().toDateString(),
-          isAcknowledged: false
-      });
   };
 
-  const acknowledgeAffirmation = () => {
+  const acknowledgeAffirmation = async () => {
       setAffirmation(prev => ({ ...prev, isAcknowledged: true }));
-      // Logic for streak update in DB is similar to `updateUser`
       const now = new Date();
-      // ... (Streak calculation same as before) ...
-      // For brevity, just updating timestamp
       updateUser({ lastAffirmationAck: now.toISOString() });
+      // Trigger new one immediately
+      await refreshAffirmation();
+  };
+
+  // --- REVENUECAT ACTIONS ---
+
+  const purchasePro = async () => {
+      try {
+          const offerings = await Purchases.getOfferings();
+          if (offerings.current !== null && offerings.current.availablePackages.length !== 0) {
+              const pack = offerings.current.availablePackages[0];
+              const { customerInfo } = await Purchases.purchasePackage(pack);
+              handleCustomerInfoUpdate(customerInfo);
+          } else {
+              alert("No offerings available.");
+          }
+      } catch (e: any) {
+          if (e.code === 'PURCHASES_ARE_NOT_CONFIGURED') {
+              alert("Payments disabled in Expo Go. Use a Development Build to test.");
+              return;
+          }
+          if (!e.userCancelled) {
+              alert("Purchase failed: " + e.message);
+          }
+      }
+  };
+
+  const purchaseCredits = async (amount: '10' | '50') => {
+      try {
+           const offerings = await Purchases.getOfferings();
+           // ... rest of logic
+           const creditPackage = offerings.all['credits']?.availablePackages.find(p => p.identifier.includes(amount));
+           
+           if (!creditPackage) {
+                // FALLBACK MOCK for Expo Go / No Config
+                updateUser({
+                    credits: {
+                        ...user.credits!,
+                        balance: (user.credits?.balance || 0) + parseInt(amount),
+                        lastRefill: new Date().toISOString()
+                    }
+                });
+                alert(`(Mock) Added ${amount} credits!`);
+                return;
+           }
+
+           await Purchases.purchasePackage(creditPackage);
+           updateUser({
+               credits: {
+                   ...user.credits!,
+                   balance: (user.credits?.balance || 0) + parseInt(amount),
+                   lastRefill: new Date().toISOString()
+               }
+           });
+           
+      } catch (e: any) {
+          if (e.code === 'PURCHASES_ARE_NOT_CONFIGURED') {
+               // Fallback for Expo Go
+                updateUser({
+                    credits: {
+                        ...user.credits!,
+                        balance: (user.credits?.balance || 0) + parseInt(amount),
+                        lastRefill: new Date().toISOString()
+                    }
+                });
+                alert(`(Mock/Expo Go) Added ${amount} credits!`);
+              return;
+          }
+          if (!e.userCancelled) {
+               alert("Credit purchase failed.");
+          }
+      }
+  };
+
+  const restorePurchases = async () => {
+      try {
+          const info = await Purchases.restorePurchases();
+          handleCustomerInfoUpdate(info);
+          alert("Purchases restored successfully.");
+      } catch (e) {
+          alert("Restore failed.");
+      }
+  };
+
+  const logout = async () => {
+      if (authUser) {
+          await auth.signOut();
+      }
       
-      setTimeout(() => refreshAffirmation(affirmation.type), 2000);
+      // Reset all states
+      setIsGuestMode(false);
+      setUser(DEFAULT_USER_PROFILE);
+      setGoals([]);
+      setRituals([]);
+      setLifestyleHistory([]);
+      setGratitudeEntries([]);
+      setAffirmation({
+          text: "Welcome to your new reality.",
+          type: 'MORNING',
+          lastGenerated: null,
+          isAcknowledged: false
+      });
+      setCurrentScreen('ONBOARDING');
   };
 
   const resetDay = async () => {
@@ -396,6 +581,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       gratitudeEntries,
       currentScreen,
       affirmation,
+      loadingAffirmation,
       authUser,
       authLoading,
       isGuestMode,
@@ -413,7 +599,11 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       regenerateGoalImage,
       personalizeGoalImage,
       addToLifestyleHistory,
-      resetDay
+      logout,
+      resetDay,
+      purchasePro,
+      purchaseCredits,
+      restorePurchases
     }}>
       {children}
     </ManifestContext.Provider>

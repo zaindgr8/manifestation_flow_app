@@ -14,6 +14,16 @@ export interface UserProfile {
     morning: string;
     evening: string;
   };
+  subscription?: {
+    plan: 'FREE' | 'PRO';
+    status: 'active' | 'canceled' | 'expired';
+    renewsAt: string;
+  };
+  credits?: {
+    balance: number;
+    lifetimeUsed: number;
+    lastRefill: string | null;
+  };
 }
 
 export interface VisionGoal {
@@ -41,7 +51,7 @@ export interface LifestyleShift {
   createdAt: number;
 }
 
-export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER' | 'SIMULATOR';
+export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER' | 'SIMULATOR' | 'PROFILE';
 
 export interface AffirmationState {
   text: string;

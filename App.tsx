@@ -1,5 +1,7 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { ManifestProvider, useManifest } from './context/ManifestContext';
 import { Onboarding } from './screens/Onboarding';
 import { VisionWizard } from './screens/VisionWizard';
@@ -7,17 +9,37 @@ import { Timeline } from './screens/Timeline';
 import { DailyAligner } from './screens/DailyAligner';
 import { LifestyleSimulator } from './screens/LifestyleSimulator';
 import { AuthScreen } from './screens/Auth';
-import { LayoutDashboard, Calendar, Wand2, Loader2 } from 'lucide-react';
+import { ProfileScreen } from './screens/Profile';
+import { LayoutDashboard, Calendar, Wand2, Loader2, User } from 'lucide-react-native';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
 const AppContent = () => {
+    useEffect(() => {
+        // RevenueCat Initialization
+        if (Platform.OS === 'ios' || Platform.OS === 'android') {
+            try {
+                Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+                const apiKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY;
+                if (apiKey) {
+                    Purchases.configure({ apiKey });
+                }
+            } catch (e) {
+                console.warn("RevenueCat failed to initialize (likely running in Expo Go w/o Dev Client). Ignoring.");
+            }
+        }
+    }, []);
+
   const { currentScreen, setScreen, user, authUser, authLoading, isGuestMode } = useManifest();
 
   // Loading State
   if (authLoading) {
       return (
-          <div className="min-h-screen bg-void flex items-center justify-center">
-              <Loader2 className="animate-spin text-gold w-8 h-8" />
-          </div>
+          <View className="flex-1 bg-void items-center justify-center">
+              <Loader2 size={32} className="text-gold animate-spin" />
+          </View>
       );
   }
 
@@ -34,6 +56,7 @@ const AppContent = () => {
       case 'TIMELINE': return <Timeline />;
       case 'ALIGNER': return <DailyAligner />;
       case 'SIMULATOR': return <LifestyleSimulator />;
+      case 'PROFILE': return <ProfileScreen />;
       default: return <Onboarding />;
     }
   };
@@ -42,58 +65,89 @@ const AppContent = () => {
   const ShowTabBar = user.isOnboarded && currentScreen !== 'ONBOARDING' && currentScreen !== 'WIZARD';
 
   return (
-    <div className="text-white font-sans max-w-md mx-auto relative min-h-screen bg-void shadow-2xl overflow-hidden">
+    <SafeAreaView className="flex-1 bg-void" edges={['top', 'left', 'right']}>
+      <StatusBar style="light" />
+      
       {/* Main Content Area */}
-      {renderScreen()}
+      <View className="flex-1 text-white">
+        {renderScreen()}
+      </View>
 
       {/* Floating Bottom Navigation */}
       {ShowTabBar && (
-        <div className="fixed bottom-6 left-0 right-0 z-50 px-6 max-w-md mx-auto">
-          <div className="bg-surface/90 backdrop-blur-xl border border-white/10 rounded-full h-16 flex items-center justify-around shadow-2xl shadow-black/50 px-2">
+        <View className="absolute bottom-8 left-6 right-6 z-50">
+          <BlurView intensity={30} tint="dark" className="bg-surface/60 flex-row items-center justify-between h-16 rounded-[24px] border border-white/10 px-4 shadow-2xl">
             
-            <button 
-              onClick={() => setScreen('TIMELINE')}
-              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'TIMELINE' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+            <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setScreen('TIMELINE');
+              }}
+              className="flex-1 items-center justify-center h-full active:scale-90 transition-transform"
             >
-              <Calendar size={20} className={currentScreen === 'TIMELINE' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
-              <span className="text-[9px] uppercase tracking-widest mt-1">Vision</span>
-            </button>
+              <Calendar size={22} color={currentScreen === 'TIMELINE' ? '#F4E0B9' : '#9CA3AF'} strokeWidth={2.5} />
+              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'TIMELINE' ? 'text-gold' : 'text-gray-400'}`}>Vision</Text>
+            </TouchableOpacity>
 
-             <button 
-              onClick={() => setScreen('SIMULATOR')}
-              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'SIMULATOR' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+             <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setScreen('SIMULATOR');
+              }}
+              className="flex-1 items-center justify-center h-full active:scale-90 transition-transform"
             >
-              <Wand2 size={20} className={currentScreen === 'SIMULATOR' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
-              <span className="text-[9px] uppercase tracking-widest mt-1">Shift</span>
-            </button>
+              <Wand2 size={22} color={currentScreen === 'SIMULATOR' ? '#F4E0B9' : '#9CA3AF'} strokeWidth={2.5} />
+              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'SIMULATOR' ? 'text-gold' : 'text-gray-400'}`}>Shift</Text>
+            </TouchableOpacity>
 
             {/* Middle Action Button (Add) */}
-            <button 
-              onClick={() => setScreen('WIZARD')}
-              className="w-12 h-12 rounded-full bg-gradient-to-tr from-gold to-gold-dim flex items-center justify-center shadow-[0_0_15px_rgba(244,224,185,0.4)] -mt-8 border-4 border-void active:scale-95 transition-transform"
-            >
-               <span className="text-3xl text-void font-light pb-1">+</span>
-            </button>
+            <View className="px-2">
+              <TouchableOpacity 
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setScreen('WIZARD');
+                }}
+                className="w-14 h-14 rounded-full bg-gold items-center justify-center shadow-2xl shadow-gold/40 -mt-10 border-4 border-void active:scale-95 transition-transform"
+              >
+                <Text className="text-3xl text-void font-bold">+</Text>
+              </TouchableOpacity>
+            </View>
 
-            <button 
-              onClick={() => setScreen('ALIGNER')}
-              className={`flex flex-col items-center justify-center w-14 h-full transition-colors ${currentScreen === 'ALIGNER' ? 'text-gold' : 'text-gray-500 hover:text-gray-300'}`}
+            <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setScreen('ALIGNER');
+              }}
+              className="flex-1 items-center justify-center h-full active:scale-90 transition-transform"
             >
-              <LayoutDashboard size={20} className={currentScreen === 'ALIGNER' ? 'drop-shadow-[0_0_8px_rgba(244,224,185,0.5)]' : ''} />
-              <span className="text-[9px] uppercase tracking-widest mt-1">Align</span>
-            </button>
+              <LayoutDashboard size={22} color={currentScreen === 'ALIGNER' ? '#F4E0B9' : '#9CA3AF'} strokeWidth={2.5} />
+              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'ALIGNER' ? 'text-gold' : 'text-gray-400'}`}>Align</Text>
+            </TouchableOpacity>
             
-          </div>
-        </div>
+            <TouchableOpacity 
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setScreen('PROFILE');
+              }}
+              className="flex-1 items-center justify-center h-full active:scale-90 transition-transform"
+            >
+              <User size={22} color={currentScreen === 'PROFILE' ? '#F4E0B9' : '#9CA3AF'} strokeWidth={2.5} />
+              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'PROFILE' ? 'text-gold' : 'text-gray-400'}`}>You</Text>
+            </TouchableOpacity>
+
+          </BlurView>
+        </View>
       )}
-    </div>
+    </SafeAreaView>
   );
 };
 
 export default function App() {
   return (
-    <ManifestProvider>
-      <AppContent />
-    </ManifestProvider>
+    <SafeAreaProvider>
+      <ManifestProvider>
+        <AppContent />
+      </ManifestProvider>
+    </SafeAreaProvider>
   );
 }
