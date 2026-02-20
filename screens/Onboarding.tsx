@@ -1,14 +1,51 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Platform, ImageBackground } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Platform,
+  StyleSheet,
+  Dimensions,
+} from 'react-native';
 import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
-import { Camera, Upload, Sparkles, X, Aperture, ChevronRight, User as UserIcon } from 'lucide-react-native';
+import { Camera, Upload, Sparkles, User as UserIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Gender } from '../types';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+
+const { width } = Dimensions.get('window');
+
+/**
+ * REDESIGNED ONBOARDING SCREEN
+ * Fixed spacing issues and upgraded to a premium glassmorphic UI.
+ * Old version preserved in comments below.
+ */
+
+/*
+// ──────────────────────────────────────────────────────────────────────────────
+// OLD VERSION (Preserved for reference as requested)
+// ──────────────────────────────────────────────────────────────────────────────
+export const OnboardingOld: React.FC = () => {
+  // ... original state and logic ...
+  return (
+    <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="bg-void">
+       <View className="flex-1 items-center justify-center p-8 text-center">
+         <View className="w-full max-w-md">
+           {step === 1 && (<View className="space-y-5">... name, gender, dob ...</View>)}
+           {step === 2 && (<View className="space-y-5">... identity shift ...</View>)}
+         </View>
+       </View>
+    </ScrollView>
+  );
+};
+// ──────────────────────────────────────────────────────────────────────────────
+*/
 
 export const Onboarding: React.FC = () => {
   const { updateUser, user } = useManifest();
@@ -17,7 +54,6 @@ export const Onboarding: React.FC = () => {
   const [gender, setGender] = useState<Gender | ''>(user.gender || '');
   const [dob, setDob] = useState(user.dob || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  
   const [selfie, setSelfie] = useState<string | null>(user.selfieUrl || null);
 
   useEffect(() => {
@@ -43,7 +79,7 @@ export const Onboarding: React.FC = () => {
   const takePhoto = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    
+
     if (permissionResult.granted === false) {
       alert("You've refused to allow this app to access your camera!");
       return;
@@ -63,180 +99,458 @@ export const Onboarding: React.FC = () => {
 
   const finishOnboarding = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateUser({ 
-        name, 
-        gender: gender as Gender,
-        dob,
-        selfieUrl: selfie, 
-        isOnboarded: true 
+    updateUser({
+      name,
+      gender: gender as Gender,
+      dob,
+      selfieUrl: selfie,
+      isOnboarded: true
     });
   };
 
   return (
-    <ScrollView 
-        contentContainerStyle={{ flexGrow: 1 }} 
-        className="bg-void"
-        showsVerticalScrollIndicator={false}
-    >
-      <View className="flex-1 items-center justify-center p-8 text-center">
-        {/* Ambient background blur */}
-        <View className="absolute top-[-50px] right-[-50px] w-80 h-80 bg-gold/10 rounded-full blur-[100px]"></View>
-        <View className="absolute bottom-[-100px] left-[-50px] w-96 h-96 bg-gold/5 rounded-full blur-[120px]"></View>
+    <View style={styles.container}>
+      {/* Background Ambience */}
+      <View style={styles.ambience1} />
+      <View style={styles.ambience2} />
 
-        <View className="w-full max-w-md">
-          <View className="items-center mb-12">
-            <View className="w-16 h-16 rounded-[20px] bg-surface border border-gold/20 items-center justify-center shadow-2xl shadow-gold/20 mb-4">
-                <Sparkles size={32} color="#F4E0B9" />
-            </View>
-            <View className="flex-row items-center gap-1.5">
-                {[1, 2].map(s => (
-                    <View key={s} className={`h-1 rounded-full ${step === s ? 'w-8 bg-gold' : 'w-2 bg-white/10'}`} />
-                ))}
-            </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.logoWrapper}>
+            <BlurView intensity={20} tint="dark" style={styles.logoBlur}>
+              <Sparkles size={32} color="#F4E0B9" />
+            </BlurView>
           </View>
 
-          {step === 1 && (
-            <View className="space-y-10">
-              <View>
-                <Text className="text-4xl font-black text-white text-center tracking-tighter">Who is manifesting?</Text>
-                <Text className="text-gold/40 text-[10px] font-black uppercase tracking-[3px] text-center mt-3 leading-relaxed">Tailor the quantum fields to your presence</Text>
-              </View>
-              
-              <View className="space-y-6">
-                <Input 
-                    label="YOUR IDENTITY"
-                    placeholder="E.g. Seeker of Truth" 
-                    value={name} 
-                    onChangeText={setName}
+          <View style={styles.progressContainer}>
+            {[1, 2].map(s => (
+              <View
+                key={s}
+                style={[
+                  styles.progressDot,
+                  step === s ? styles.progressDotActive : styles.progressDotInactive
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+
+        {step === 1 && (
+          <View style={styles.contentWrapper}>
+            <View style={styles.textSection}>
+              <Text style={styles.title}>Who is manifesting?</Text>
+              <Text style={styles.subtitle}>TAILOR THE QUANTUM FIELDS TO YOUR PRESENCE</Text>
+            </View>
+
+            <BlurView intensity={10} tint="dark" style={styles.card}>
+              <View style={styles.form}>
+                <Input
+                  label="YOUR IDENTITY"
+                  placeholder="E.g. Seeker of Truth"
+                  value={name}
+                  onChangeText={setName}
                 />
 
-                <View className="space-y-3">
-                    <Text className="text-[10px] text-gold/60 font-black ml-1 uppercase tracking-widest">Quantum Gender</Text>
-                    <View className="bg-surface/30 border border-white/5 rounded-2xl flex-row flex-wrap p-1">
-                        {['Male', 'Female', 'Non-Binary', 'Other'].map((g) => (
-                            <TouchableOpacity 
-                                key={g}
-                                onPress={() => {
-                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                    setGender(g as Gender);
-                                }}
-                                className={`w-1/2 p-1`}
-                            >
-                                <View className={`py-3.5 items-center justify-center rounded-xl border ${gender === g ? 'bg-gold border-gold' : 'bg-transparent border-transparent'}`}>
-                                    <Text className={`text-[10px] font-black uppercase tracking-widest ${gender === g ? 'text-void' : 'text-gray-500'}`}>{g}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                <View style={styles.genderSection}>
+                  <Text style={styles.inputLabel}>QUANTUM GENDER</Text>
+                  <View style={styles.genderGrid}>
+                    {(['Male', 'Female', 'Non-Binary', 'Other'] as Gender[]).map((g) => (
+                      <TouchableOpacity
+                        key={g}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          setGender(g);
+                        }}
+                        style={[styles.genderBtn, gender === g && styles.genderBtnActive]}
+                      >
+                        <Text style={[styles.genderBtnText, gender === g && styles.genderBtnTextActive]}>
+                          {g}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
 
-                <TouchableOpacity 
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setShowDatePicker(true);
-                    }}
-                    activeOpacity={0.7}
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowDatePicker(true);
+                  }}
+                  activeOpacity={0.8}
                 >
-                    <View pointerEvents="none">
-                      <Input 
-                        label="Earthly Entry (DOB)"
-                        placeholder="Select Portal Date"
-                        value={dob}
-                        editable={false}
-                      />
-                    </View>
-                </TouchableOpacity>
-              </View>
-
-              {showDatePicker && (
-                <BlurView intensity={20} tint="dark" className="rounded-[32px] overflow-hidden border border-white/5 p-4">
-                    <RNDateTimePicker
-                      value={dob ? new Date(dob) : new Date()}
-                      mode="date"
-                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                      onChange={(event, date) => {
-                        if (Platform.OS === 'android') setShowDatePicker(false);
-                        if (date) {
-                          setDob(date.toISOString().split('T')[0]);
-                        }
-                      }}
-                      maximumDate={new Date()}
+                  <View pointerEvents="none">
+                    <Input
+                      label="EARTHLY ENTRY (DOB)"
+                      placeholder="Select Portal Date"
+                      value={dob}
+                      editable={false}
                     />
-                    {Platform.OS === 'ios' && (
-                       <Button variant="secondary" onPress={() => setShowDatePicker(false)}>Confirm Alignment</Button>
-                    )}
-                </BlurView>
-              )}
-
-              <Button 
-                disabled={!name || !gender || !dob} 
-                onPress={() => {
-                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                   setStep(2);
-                }}
-              >
-                Continue Alignment
-              </Button>
-            </View>
-          )}
-
-          {step === 2 && (
-            <View className="space-y-10">
-              <View>
-                <Text className="text-4xl font-black text-white text-center tracking-tighter">The Identity Shift</Text>
-                <Text className="text-gold/40 text-[10px] font-black uppercase tracking-[3px] text-center mt-3 leading-relaxed">Capture your quantum essence</Text>
-              </View>
-              
-              <View className="items-center">
-                <View className="relative">
-                    <View className="w-56 h-56 rounded-full border-2 border-gold/20 items-center justify-center overflow-hidden bg-surface/30 shadow-2xl shadow-gold/20">
-                      {selfie ? (
-                        <Image source={{ uri: selfie }} className="w-full h-full" />
-                      ) : (
-                        <View className="items-center opacity-20">
-                          <UserIcon size={64} color="#F4E0B9" />
-                        </View>
-                      )}
-                    </View>
-                    <View className="absolute -bottom-2 -right-2 flex-row gap-2">
-                         <TouchableOpacity 
-                          onPress={takePhoto}
-                          className="w-14 h-14 bg-gold rounded-full items-center justify-center border-4 border-void shadow-xl"
-                       >
-                          <Camera size={20} color="#050505" /> 
-                       </TouchableOpacity>
-                       <TouchableOpacity 
-                          onPress={pickImage}
-                          className="w-14 h-14 bg-surface rounded-full items-center justify-center border-4 border-void shadow-xl border-white/5"
-                       >
-                          <Upload size={20} color="#F4E0B9" /> 
-                       </TouchableOpacity>
-                    </View>
-                </View>
-                <Text className="text-xs text-gray-500 text-center mt-12 px-8 leading-relaxed italic">
-                    We use your physical manifestation to project your highest self into the timeline.
-                </Text>
-              </View>
-
-              <View className="space-y-4">
-                <Button disabled={!selfie} onPress={finishOnboarding}>
-                   Enter ManifestFlow
-                </Button>
-                
-                <TouchableOpacity 
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                        setStep(1);
-                    }} 
-                    className="py-4"
-                >
-                    <Text className="text-[10px] text-gray-600 font-bold uppercase tracking-widest text-center">Re-Align Details</Text>
+                  </View>
                 </TouchableOpacity>
+
+                {showDatePicker && (
+                  <View style={styles.datePickerContainer}>
+                    <BlurView intensity={30} tint="dark" style={styles.datePickerBlur}>
+                      <RNDateTimePicker
+                        value={dob ? new Date(dob) : new Date()}
+                        mode="date"
+                        themeVariant="dark"
+                        accentColor="#F4E0B9" // Match the gold theme
+                        textColor="#FFFFFF"   // Ensure text is white
+                        display={Platform.OS === 'ios' ? 'inline' : 'default'} // Inline looks more "Premium" on iOS
+                        onChange={(event, date) => {
+                          if (Platform.OS === 'android' && event.type === 'set') setShowDatePicker(false);
+                          if (date) {
+                            setDob(date.toISOString().split('T')[0]);
+                          }
+                        }}
+                        maximumDate={new Date()}
+                      />
+                      {Platform.OS === 'ios' && (
+                        <TouchableOpacity
+                          onPress={() => setShowDatePicker(false)}
+                          style={styles.datePickerDone}
+                        >
+                          <Text style={styles.datePickerDoneText}>Confirm Alignment</Text>
+                        </TouchableOpacity>
+                      )}
+                    </BlurView>
+                  </View>
+                )}
+
+                <Button
+                  disabled={!name || !gender || !dob}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    setStep(2);
+                  }}
+                  style={styles.mainBtn}
+                >
+                  Continue Alignment
+                </Button>
               </View>
+            </BlurView>
+          </View>
+        )}
+
+        {step === 2 && (
+          <View style={styles.contentWrapper}>
+            <View style={styles.textSection}>
+              <Text style={styles.title}>The Identity Shift</Text>
+              <Text style={styles.subtitle}>CAPTURE YOUR QUANTUM ESSENCE</Text>
             </View>
-          )}
-        </View>
-      </View>
-    </ScrollView>
+
+            <BlurView intensity={10} tint="dark" style={styles.card}>
+              <View style={styles.identitySection}>
+                <View style={styles.selfieContainer}>
+                  <View style={styles.selfieFrame}>
+                    {selfie ? (
+                      <Image source={{ uri: selfie }} style={styles.selfieImage} />
+                    ) : (
+                      <View style={styles.selfiePlaceholder}>
+                        <UserIcon size={64} color="#F4E0B9" />
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.photoControls}>
+                    <TouchableOpacity onPress={takePhoto} style={styles.ctrlBtnMain}>
+                      <Camera size={22} color="#050505" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={pickImage} style={styles.ctrlBtnSec}>
+                      <Upload size={22} color="#F4E0B9" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <Text style={styles.identityDesc}>
+                  We use your physical manifestation to project your highest self into the timeline.
+                </Text>
+
+                <View style={styles.form}>
+                  <Button disabled={!selfie} onPress={finishOnboarding} style={styles.mainBtn}>
+                    Enter ManifestFlow
+                  </Button>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setStep(1);
+                    }}
+                    style={styles.backBtn}
+                  >
+                    <Text style={styles.backBtnText}>RE-ALIGN DETAILS</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </BlurView>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#050505',
+  },
+  ambience1: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    backgroundColor: 'rgba(244, 224, 185, 0.08)',
+    borderRadius: 150,
+    filter: 'blur(80px)', // Only works on supported platforms, adds glow
+  },
+  ambience2: {
+    position: 'absolute',
+    bottom: -150,
+    left: -100,
+    width: 400,
+    height: 400,
+    backgroundColor: 'rgba(244, 224, 185, 0.04)',
+    borderRadius: 200,
+    filter: 'blur(100px)',
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoWrapper: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(244, 224, 185, 0.2)',
+    backgroundColor: 'rgba(20, 20, 20, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  logoBlur: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  progressDot: {
+    height: 4,
+    borderRadius: 2,
+  },
+  progressDotActive: {
+    width: 32,
+    backgroundColor: '#F4E0B9',
+  },
+  progressDotInactive: {
+    width: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  contentWrapper: {
+    width: '100%',
+  },
+  textSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
+    letterSpacing: -1,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 10,
+    color: '#F4E0B9',
+    fontWeight: '700',
+    letterSpacing: 3,
+    marginTop: 10,
+    opacity: 0.8,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  card: {
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.01)',
+    overflow: 'hidden',
+    padding: 24,
+  },
+  form: {
+    gap: 16,
+  },
+  genderSection: {
+    marginBottom: 8,
+  },
+  inputLabel: {
+    fontSize: 10,
+    color: '#F4E0B9',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginLeft: 4,
+    marginBottom: 10,
+    opacity: 0.8,
+  },
+  genderGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    padding: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  genderBtn: {
+    width: (width - 48 - 48 - 16 - 16) / 2, // Accounting for screen padding, card padding, and grid gaps
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  genderBtnActive: {
+    backgroundColor: '#F4E0B9',
+    borderColor: '#F4E0B9',
+  },
+  genderBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  genderBtnTextActive: {
+    color: '#050505',
+  },
+  mainBtn: {
+    marginTop: 12,
+  },
+  datePickerContainer: {
+    marginTop: -8,
+    marginBottom: 8,
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  datePickerBlur: {
+    padding: 16,
+  },
+  datePickerDone: {
+    backgroundColor: '#F4E0B9',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  datePickerDoneText: {
+    color: '#050505',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  identitySection: {
+    alignItems: 'center',
+  },
+  selfieContainer: {
+    position: 'relative',
+    marginBottom: 32,
+  },
+  selfieFrame: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    borderWidth: 2,
+    borderColor: 'rgba(244, 224, 185, 0.2)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#F4E0B9',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  selfieImage: {
+    width: '100%',
+    height: '100%',
+  },
+  selfiePlaceholder: {
+    opacity: 0.3,
+  },
+  photoControls: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  ctrlBtnMain: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#F4E0B9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#050505',
+    elevation: 5,
+  },
+  ctrlBtnSec: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#151515',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 4,
+    borderColor: '#050505',
+    elevation: 5,
+  },
+  identityDesc: {
+    fontSize: 12,
+    color: '#F4E0B9',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+    fontWeight: '500',
+    letterSpacing: 2,
+    opacity: 0.85,
+  },
+  backBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  backBtnText: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+});

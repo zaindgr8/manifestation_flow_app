@@ -9,15 +9,17 @@ interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   className?: string;
+  style?: any;
 }
 
-export const Button: React.FC<ButtonProps> = ({ 
-  variant = 'primary', 
-  className = '', 
-  children, 
-  onPress, 
+export const Button: React.FC<ButtonProps> = ({
+  variant = 'primary',
+  className = '',
+  children,
+  onPress,
   disabled,
-  loading 
+  loading,
+  style
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -39,7 +41,7 @@ export const Button: React.FC<ButtonProps> = ({
   };
 
   const baseStyles = "w-full h-[56px] rounded-[16px] items-center justify-center overflow-hidden flex-row";
-  
+
   const variants = {
     primary: "bg-gold",
     secondary: "border border-gold/30 bg-gold/5",
@@ -57,9 +59,9 @@ export const Button: React.FC<ButtonProps> = ({
   const isDisabled = disabled || loading;
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }], width: '100%' }}>
-      <TouchableOpacity 
-        onPress={onPress} 
+    <Animated.View style={[{ transform: [{ scale: scaleAnim }], width: '100%' }, style]}>
+      <TouchableOpacity
+        onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         disabled={isDisabled}

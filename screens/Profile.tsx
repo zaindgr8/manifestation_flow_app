@@ -51,13 +51,13 @@ export const ProfileScreen: React.FC = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
         Alert.alert(
             "Close Portal",
-            isGuestMode 
+            isGuestMode
                 ? "Are you sure? Your temporary guest progress will be permanently lost."
                 : "Are you sure you want to logout? Your progress is safe.",
             [
                 { text: "Stay", style: "cancel" },
-                { 
-                    text: isGuestMode ? "Delete & Logout" : "Logout", 
+                {
+                    text: isGuestMode ? "Delete & Logout" : "Logout",
                     style: "destructive",
                     onPress: async () => {
                         try {
@@ -109,26 +109,28 @@ export const ProfileScreen: React.FC = () => {
     };
 
     return (
-        <ScrollView 
-            contentContainerStyle={{ flexGrow: 1, paddingBottom: 100, paddingTop: 64 }} 
+        <ScrollView
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 100, paddingTop: 64 }}
             className="bg-void"
             showsVerticalScrollIndicator={false}
         >
             {/* Header */}
             <View className="px-6 mb-10">
                 <View className="flex-row items-center justify-between">
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             setScreen('TIMELINE');
-                        }} 
+                        }}
+                        style={{ transform: [{ translateX: -8 }] }}
                         className="w-12 h-12 bg-surface/50 rounded-[16px] border border-white/10 items-center justify-center active:scale-95 transition-transform"
                     >
                         <ChevronLeft size={24} color="#F4E0B9" />
                     </TouchableOpacity>
                     <Text className="text-2xl font-black text-white tracking-tighter">Quantum Identity</Text>
-                    <TouchableOpacity 
-                        onPress={handleLogout} 
+                    <TouchableOpacity
+                        onPress={handleLogout}
+                        style={{ transform: [{ translateX: -8 }] }}
                         className="w-12 h-12 bg-red-500/10 rounded-[16px] border border-red-500/20 items-center justify-center active:scale-95 transition-transform"
                     >
                         <LogOut size={20} color="#ef4444" />
@@ -146,7 +148,7 @@ export const ProfileScreen: React.FC = () => {
                             <UserIcon size={48} color="#F4E0B9" opacity={0.3} />
                         )}
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={pickImage}
                         className="absolute bottom-0 right-0 bg-gold w-10 h-10 rounded-full items-center justify-center border-4 border-void shadow-lg active:scale-90"
                     >
@@ -157,7 +159,7 @@ export const ProfileScreen: React.FC = () => {
                     <Text className="text-2xl font-black text-white tracking-tighter">{name || 'Seeker'}</Text>
                     <View className="flex-row items-center gap-2 mt-1">
                         <Sparkles size={12} color="#F4E0B9" />
-                        <Text className="text-[10px] text-gold/60 font-bold uppercase tracking-[2px]">Frequency Aligned</Text>
+                        <Text className="text-[11px] text-gold/80 font-bold uppercase tracking-[2px]">Frequency Aligned</Text>
                     </View>
                 </View>
             </View>
@@ -168,10 +170,10 @@ export const ProfileScreen: React.FC = () => {
                     <View className="absolute top-0 right-0 p-4 opacity-10">
                         <Zap size={80} color="#F4E0B9" />
                     </View>
-                    
+
                     <View className="flex-row justify-between items-start mb-6">
                         <View>
-                            <Text className="text-[10px] text-gold font-bold uppercase tracking-[2px] mb-1">Current Plan</Text>
+                            <Text className="text-[11px] text-gold font-bold uppercase tracking-[2px] mb-1">Current Plan</Text>
                             <Text className="text-2xl font-black text-white">{user.subscription?.plan === 'PRO' ? 'MANIFESTOR PRO' : 'AWAKENED (Free)'}</Text>
                         </View>
                         {user.subscription?.plan === 'FREE' && (
@@ -189,9 +191,9 @@ export const ProfileScreen: React.FC = () => {
                             <Text className="text-white font-bold text-lg">{user.credits?.balance || 0} Credits</Text>
                             <Text className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Cosmic Energy Remaining</Text>
                         </View>
-                         <TouchableOpacity onPress={handleTopUp} className="ml-auto bg-white/10 px-3 py-2 rounded-lg active:scale-95">
-                                <Text className="text-[10px] font-black text-gold uppercase">+ Add</Text>
-                         </TouchableOpacity>
+                        <TouchableOpacity onPress={handleTopUp} className="ml-auto bg-white/10 px-3 py-2 rounded-lg active:scale-95">
+                            <Text className="text-[10px] font-black text-gold uppercase">+ Add</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </View>
@@ -199,18 +201,18 @@ export const ProfileScreen: React.FC = () => {
             {/* Form Section */}
             <View className="px-6 gap-6">
                 <View className="bg-surface/20 p-6 rounded-[24px] border border-white/5 shadow-xl">
-                    <Input 
-                        label="Seeker Name" 
-                        value={name} 
-                        onChangeText={setName} 
+                    <Input
+                        label="Seeker Name"
+                        value={name}
+                        onChangeText={setName}
                         placeholder="Your name in this timeline"
                     />
-                    
+
                     <View className="mt-2">
-                        <Text className="text-[12px] text-gold font-bold ml-1 uppercase tracking-widest mb-3">Quantum Gender</Text>
+                        <Text className="text-[11px] text-gold font-bold ml-1 uppercase tracking-[2px] mb-3">Quantum Gender</Text>
                         <View className="bg-void/50 border border-white/10 rounded-[16px] flex-row overflow-hidden p-1.5">
                             {['Male', 'Female', 'Non-Binary'].map((g) => (
-                                <TouchableOpacity 
+                                <TouchableOpacity
                                     key={g}
                                     onPress={() => {
                                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -224,7 +226,7 @@ export const ProfileScreen: React.FC = () => {
                         </View>
                     </View>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         onPress={() => {
                             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                             setShowDatePicker(true);
@@ -233,10 +235,10 @@ export const ProfileScreen: React.FC = () => {
                         className="mt-6"
                     >
                         <View pointerEvents="none">
-                            <Input 
-                                label="Origin Date" 
-                                value={dob} 
-                                editable={false} 
+                            <Input
+                                label="Origin Date"
+                                value={dob}
+                                editable={false}
                                 placeholder="Select Earthly Entry Date"
                             />
                         </View>
@@ -258,7 +260,7 @@ export const ProfileScreen: React.FC = () => {
                             maximumDate={new Date()}
                         />
                         {Platform.OS === 'ios' && (
-                           <Button variant="secondary" onPress={() => setShowDatePicker(false)}>Confirm Date</Button>
+                            <Button variant="secondary" onPress={() => setShowDatePicker(false)}>Confirm Date</Button>
                         )}
                     </View>
                 )}
@@ -279,9 +281,9 @@ export const ProfileScreen: React.FC = () => {
                     </View>
                 </View>
             </View>
-            
-            <View className="mt-16 mb-10">
-                 <Text className="text-center text-gray-500 text-xs font-bold uppercase tracking-[4px]">ManifestFlow v1.0.0-PRO</Text>
+
+            <View className="mt-10 mb-8">
+                <Text className="text-center text-gray-400 text-xs font-bold uppercase tracking-[4px]">ManifestFlow v1.0.0-PRO</Text>
             </View>
         </ScrollView>
     );
