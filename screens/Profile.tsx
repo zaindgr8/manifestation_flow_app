@@ -18,6 +18,7 @@ export const ProfileScreen: React.FC = () => {
     const [dob, setDob] = useState(user.dob || '');
     const [selfie, setSelfie] = useState<string | null>(user.selfieUrl);
     const [isSaving, setIsSaving] = useState(false);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     useEffect(() => {
@@ -81,31 +82,32 @@ export const ProfileScreen: React.FC = () => {
         });
 
         if (!result.canceled) {
-            setSelfie(result.assets[0].uri);
+            const uri = result.assets[0].uri;
+            // Show the image immediately in the UI (optimistic)
+            setSelfie(uri);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Auto-save: upload to Firebase Storage right away so image persists
+            // even if the user navigates away without tapping "Synchronize Identity".
+            setIsUploadingImage(true);
+            try {
+                await updateUser({ selfieUrl: uri });
+            } catch (e) {
+                console.error('Auto-save of profile image failed:', e);
+            } finally {
+                setIsUploadingImage(false);
+            }
         }
     };
 
-    const handleUpgrade = async () => {
+    const handleUpgrade = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        try {
-            await purchasePro();
-        } catch (e) {
-            console.error(e);
-        }
+        setScreen('STORE');
     };
 
-    const handleTopUp = async () => {
+    const handleTopUp = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        Alert.alert(
-            "Top Up Cosmic Energy",
-            "Select an energy pack to instantly refill your credits.",
-            [
-                { text: "Cancel", style: "cancel" },
-                { text: "10 Credits ($2.99)", onPress: () => purchaseCredits('10') },
-                { text: "50 Credits ($9.99)", onPress: () => purchaseCredits('50') }
-            ]
-        );
+        setScreen('STORE');
     };
 
     return (
@@ -127,7 +129,7 @@ export const ProfileScreen: React.FC = () => {
                     >
                         <ChevronLeft size={24} color="#F4E0B9" />
                     </TouchableOpacity>
-                    <Text className="text-2xl font-black text-white tracking-tighter">Quantum Identity</Text>
+                    <Text className="text-2xl font-black text-white tracking-tighter">MY PROFILE</Text>
                     <TouchableOpacity
                         onPress={handleLogout}
                         style={{ transform: [{ translateX: -8 }] }}
@@ -146,6 +148,11 @@ export const ProfileScreen: React.FC = () => {
                             <Image source={{ uri: selfie }} className="w-full h-full" />
                         ) : (
                             <UserIcon size={48} color="#F4E0B9" opacity={0.3} />
+                        )}
+                        {isUploadingImage && (
+                            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+                                <ActivityIndicator color="#F4E0B9" />
+                            </View>
                         )}
                     </View>
                     <TouchableOpacity
@@ -183,18 +190,22 @@ export const ProfileScreen: React.FC = () => {
                         )}
                     </View>
 
-                    <View className="flex-row items-center gap-4 bg-void/40 p-4 rounded-[16px] border border-white/5">
+                    <TouchableOpacity 
+                        activeOpacity={0.8}
+                        onPress={() => setScreen('STORE')}
+                        className="flex-row items-center gap-4 bg-void/40 p-4 rounded-[16px] border border-white/5"
+                    >
                         <View className="w-10 h-10 rounded-full bg-gold/10 items-center justify-center">
-                            <Sparkles size={20} color="#F4E0B9" />
+                            <Zap size={20} color="#F4E0B9" fill="#F4E0B9" />
                         </View>
                         <View>
                             <Text className="text-white font-bold text-lg">{user.credits?.balance || 0} Credits</Text>
-                            <Text className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Cosmic Energy Remaining</Text>
+                            <Text className="text-gray-400 text-[10px] font-bold uppercase tracking-wider">Tap to refill</Text>
                         </View>
-                        <TouchableOpacity onPress={handleTopUp} className="ml-auto bg-white/10 px-3 py-2 rounded-lg active:scale-95">
-                            <Text className="text-[10px] font-black text-gold uppercase">+ Add</Text>
-                        </TouchableOpacity>
-                    </View>
+                        <View className="ml-auto bg-white/10 px-3 py-2 rounded-lg">
+                            <Text className="text-[10px] font-black text-gold uppercase">STORE</Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
             </View>
 
@@ -202,14 +213,14 @@ export const ProfileScreen: React.FC = () => {
             <View className="px-6 gap-6">
                 <View className="bg-surface/20 p-6 rounded-[24px] border border-white/5 shadow-xl">
                     <Input
-                        label="Seeker Name"
+                        label="User Name"
                         value={name}
                         onChangeText={setName}
                         placeholder="Your name in this timeline"
                     />
 
                     <View className="mt-2">
-                        <Text className="text-[11px] text-gold font-bold ml-1 uppercase tracking-[2px] mb-3">Quantum Gender</Text>
+                        <Text className="text-[11px] text-gold font-bold ml-1 uppercase tracking-[2px] mb-3">Gender</Text>
                         <View className="bg-void/50 border border-white/10 rounded-[16px] flex-row overflow-hidden p-1.5">
                             {['Male', 'Female', 'Non-Binary'].map((g) => (
                                 <TouchableOpacity
@@ -236,7 +247,7 @@ export const ProfileScreen: React.FC = () => {
                     >
                         <View pointerEvents="none">
                             <Input
-                                label="Origin Date"
+                                label="Date Of Birth"
                                 value={dob}
                                 editable={false}
                                 placeholder="Select Earthly Entry Date"
@@ -266,7 +277,7 @@ export const ProfileScreen: React.FC = () => {
                 )}
 
                 <View className="mt-4">
-                    <Button loading={isSaving} onPress={handleSave}>Synchronize Identity</Button>
+                    <Button loading={isSaving} onPress={handleSave}>SAVE CHANGES</Button>
                 </View>
 
                 {/* Footer Badges */}

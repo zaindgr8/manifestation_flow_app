@@ -22,6 +22,7 @@ export interface UserProfile {
   credits?: {
     balance: number;
     lifetimeUsed: number;
+    lifetimePurchased: number;
     lastRefill: string | null;
   };
 }
@@ -32,10 +33,14 @@ export interface VisionGoal {
   title: string;
   targetDate: string;
   createdAt: number;
-  imageUrl?: string; // Stores the AI generated image or null
-  isRegeneratingImage?: boolean; // UI state for image generation
+  imageUrl?: string; 
+  isRegeneratingImage?: boolean; 
+  imageError?: string; // To track AI generation errors (e.g. safety filters)
+  isLoadingImage?: boolean; // Specific state for the initial generation
 }
 
+// Note: User-facing terminology has shifted from 'Ritual' to 'Target'. 
+// This interface remains 'DailyRitual' for technical compatibility.
 export interface DailyRitual {
   id: string;
   goalId: string; // Links back to the vision
@@ -51,7 +56,7 @@ export interface LifestyleShift {
   createdAt: number;
 }
 
-export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER' | 'SIMULATOR' | 'PROFILE';
+export type AppScreen = 'ONBOARDING' | 'WIZARD' | 'TIMELINE' | 'ALIGNER' | 'SIMULATOR' | 'PROFILE' | 'STORE';
 
 export interface AffirmationState {
   text: string;

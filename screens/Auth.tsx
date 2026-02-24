@@ -151,15 +151,15 @@ export const AuthScreen: React.FC = () => {
                         {/* Fields */}
                         <View style={styles.form}>
                             <Input
-                                label="Quantum Email"
-                                placeholder="you@universe.com"
+                                label="Email Address"
+                                placeholder="Enter Your Email"
                                 value={email}
                                 onChangeText={setEmail}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
                             <Input
-                                label="Access Key"
+                                label="PASSWORD"
                                 placeholder="••••••••"
                                 value={password}
                                 onChangeText={setPassword}
@@ -178,7 +178,7 @@ export const AuthScreen: React.FC = () => {
                                 onPress={handleEmailAuth}
                                 style={styles.mainButton}
                             >
-                                {isLogin ? 'Enter Portal' : 'Begin Journey'}
+                                {isLogin ? 'LOGIN' : 'Sign Up'}
                             </Button>
                         </View>
 
@@ -214,14 +214,14 @@ export const AuthScreen: React.FC = () => {
                             }}
                             style={styles.guestButton}
                         >
-                            <Text style={styles.guestText}>Entry as Seeker Only</Text>
+                            {/* <Text style={styles.guestText}>Entry as Seeker Only</Text> */}
                         </TouchableOpacity>
                     </BlurView>
                 </View>
 
-                <Text style={styles.footerText}>
+                {/* <Text style={styles.footerText}>
                     By entering, you agree to align with{"\n"}your highest self.
-                </Text>
+                </Text> */}
             </ScrollView>
         </KeyboardAvoidingView>
     );

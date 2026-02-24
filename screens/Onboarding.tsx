@@ -68,10 +68,19 @@ export const Onboarding: React.FC = () => {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
     });
 
     if (!result.canceled) {
-      setSelfie(result.assets[0].uri);
+      const asset = result.assets[0];
+      if (!asset.base64 && asset.uri.startsWith('blob:')) {
+        alert('Image could not be processed. Please try again or use a different image.');
+        return;
+      }
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      setSelfie(imageUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
@@ -89,10 +98,19 @@ export const Onboarding: React.FC = () => {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
     });
 
     if (!result.canceled) {
-      setSelfie(result.assets[0].uri);
+      const asset = result.assets[0];
+      if (!asset.base64 && asset.uri.startsWith('blob:')) {
+        alert('Image could not be processed. Please try again or use a different image.');
+        return;
+      }
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      setSelfie(imageUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
@@ -110,10 +128,6 @@ export const Onboarding: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Background Ambience */}
-      <View style={styles.ambience1} />
-      <View style={styles.ambience2} />
-
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -142,22 +156,22 @@ export const Onboarding: React.FC = () => {
           <View style={styles.contentWrapper}>
             <View style={styles.textSection}>
               <Text style={styles.title}>Who is manifesting?</Text>
-              <Text style={styles.subtitle}>TAILOR THE QUANTUM FIELDS TO YOUR PRESENCE</Text>
+              <Text style={styles.subtitle}>Tell Us About Yourself To Align Your Energy.</Text>
             </View>
 
             <BlurView intensity={10} tint="dark" style={styles.card}>
               <View style={styles.form}>
                 <Input
-                  label="YOUR IDENTITY"
-                  placeholder="E.g. Seeker of Truth"
+                  label="YOUR NAME"
+                  placeholder="How would you like to be addressed?"
                   value={name}
                   onChangeText={setName}
                 />
 
                 <View style={styles.genderSection}>
-                  <Text style={styles.inputLabel}>QUANTUM GENDER</Text>
+                  <Text style={styles.inputLabel}>YOUR GENDER</Text>
                   <View style={styles.genderGrid}>
-                    {(['Male', 'Female', 'Non-Binary', 'Other'] as Gender[]).map((g) => (
+                    {(['Male', 'Female'] as Gender[]).map((g) => (
                       <TouchableOpacity
                         key={g}
                         onPress={() => {
@@ -183,8 +197,8 @@ export const Onboarding: React.FC = () => {
                 >
                   <View pointerEvents="none">
                     <Input
-                      label="EARTHLY ENTRY (DOB)"
-                      placeholder="Select Portal Date"
+                      label="BIRTHDAY (DOB)"
+                      placeholder="Select Your Birthday"
                       value={dob}
                       editable={false}
                     />
@@ -200,7 +214,7 @@ export const Onboarding: React.FC = () => {
                         themeVariant="dark"
                         accentColor="#F4E0B9" // Match the gold theme
                         textColor="#FFFFFF"   // Ensure text is white
-                        display={Platform.OS === 'ios' ? 'inline' : 'default'} // Inline looks more "Premium" on iOS
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                         onChange={(event, date) => {
                           if (Platform.OS === 'android' && event.type === 'set') setShowDatePicker(false);
                           if (date) {
@@ -211,10 +225,15 @@ export const Onboarding: React.FC = () => {
                       />
                       {Platform.OS === 'ios' && (
                         <TouchableOpacity
-                          onPress={() => setShowDatePicker(false)}
+                          onPress={() => {
+                            if (!dob) {
+                              setDob(new Date().toISOString().split('T')[0]);
+                            }
+                            setShowDatePicker(false);
+                          }}
                           style={styles.datePickerDone}
                         >
-                          <Text style={styles.datePickerDoneText}>Confirm Alignment</Text>
+                          <Text style={styles.datePickerDoneText}>Confirm</Text>
                         </TouchableOpacity>
                       )}
                     </BlurView>
@@ -229,7 +248,7 @@ export const Onboarding: React.FC = () => {
                   }}
                   style={styles.mainBtn}
                 >
-                  Continue Alignment
+                  Continue
                 </Button>
               </View>
             </BlurView>
@@ -239,8 +258,8 @@ export const Onboarding: React.FC = () => {
         {step === 2 && (
           <View style={styles.contentWrapper}>
             <View style={styles.textSection}>
-              <Text style={styles.title}>The Identity Shift</Text>
-              <Text style={styles.subtitle}>CAPTURE YOUR QUANTUM ESSENCE</Text>
+              <Text style={styles.title}>Add Profile Photo</Text>
+              <Text style={styles.subtitle}>PUT A FACE TO YOUR FUTURE</Text>
             </View>
 
             <BlurView intensity={10} tint="dark" style={styles.card}>
@@ -267,7 +286,7 @@ export const Onboarding: React.FC = () => {
                 </View>
 
                 <Text style={styles.identityDesc}>
-                  We use your physical manifestation to project your highest self into the timeline.
+                  Upload a Photo to Make Your Manifestation Journey More Personal.
                 </Text>
 
                 <View style={styles.form}>
@@ -282,7 +301,7 @@ export const Onboarding: React.FC = () => {
                     }}
                     style={styles.backBtn}
                   >
-                    <Text style={styles.backBtnText}>RE-ALIGN DETAILS</Text>
+                    <Text style={styles.backBtnText}>RE-EDIT DETAILS</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -451,20 +470,24 @@ const styles = StyleSheet.create({
   datePickerContainer: {
     marginTop: -8,
     marginBottom: 8,
+    marginHorizontal: -16,
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   datePickerBlur: {
-    padding: 16,
+    padding: 8,
+    alignItems: 'center',
   },
   datePickerDone: {
     backgroundColor: '#F4E0B9',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
+    marginHorizontal: 8,
   },
   datePickerDoneText: {
     color: '#050505',

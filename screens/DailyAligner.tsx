@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Modal, TextInput, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
 import { useManifest } from '../context/ManifestContext';
 import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles, Maximize2, LayoutDashboard } from 'lucide-react-native';
 import { Button } from '../components/Button';
@@ -9,18 +9,25 @@ import { BlurView } from 'expo-blur';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 export const DailyAligner: React.FC = () => {
-  const { user, rituals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, gratitudeEntries, addGratitude, loadingAffirmation } = useManifest();
+  const { user, rituals, goals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, gratitudeEntries, addGratitude, loadingAffirmation } = useManifest();
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
-  const [newRitualTitle, setNewRitualTitle] = useState('');
+  const [newTargetTitle, setNewTargetTitle] = useState('');
   const [gratitudeInput, setGratitudeInput] = useState('');
+  // These are the "committed" display values shown in the buttons.
   const [morningTime, setMorningTime] = useState(user.reminderTimes?.morning || '08:00');
   const [eveningTime, setEveningTime] = useState(user.reminderTimes?.evening || '20:00');
   const [showMorningPicker, setShowMorningPicker] = useState(false);
   const [showEveningPicker, setShowEveningPicker] = useState(false);
 
+  // Use state for the active picker value to ensure it's a properly controlled component.
+  // This prevents the "snap-back" behavior on iOS.
+  const [morningPickerDate, setMorningPickerDate] = useState(new Date());
+  const [eveningPickerDate, setEveningPickerDate] = useState(new Date());
+
   const formatTimeForDisplay = (timeStr: string) => {
+    if (!timeStr) return '--:--';
     const [hours, minutes] = timeStr.split(':').map(Number);
     const period = hours >= 12 ? 'PM' : 'AM';
     const h = hours % 12 || 12;
@@ -30,28 +37,57 @@ export const DailyAligner: React.FC = () => {
 
   const getTimeDate = (timeStr: string) => {
     const d = new Date();
-    const [h, m] = timeStr.split(':').map(Number);
+    const [h, m] = (timeStr || '00:00').split(':').map(Number);
     d.setHours(h, m, 0, 0);
     return d;
   };
 
   const onTimeChange = (type: 'morning' | 'evening', event: any, selectedDate?: Date) => {
-    // Android: dismiss on any selection or cancel
     if (Platform.OS === 'android') {
       setShowMorningPicker(false);
       setShowEveningPicker(false);
+      if (selectedDate) {
+        const h = selectedDate.getHours().toString().padStart(2, '0');
+        const m = selectedDate.getMinutes().toString().padStart(2, '0');
+        const timeStr = `${h}:${m}`;
+        if (type === 'morning') setMorningTime(timeStr);
+        else setEveningTime(timeStr);
+      }
+      return;
     }
 
+    // iOS: update the state immediately so the wheel follows the user's finger correctly
     if (selectedDate) {
-      const h = selectedDate.getHours().toString().padStart(2, '0');
-      const m = selectedDate.getMinutes().toString().padStart(2, '0');
-      const timeStr = `${h}:${m}`;
-      if (type === 'morning') {
-        setMorningTime(timeStr);
-      } else {
-        setEveningTime(timeStr);
-      }
+      if (type === 'morning') setMorningPickerDate(selectedDate);
+      else setEveningPickerDate(selectedDate);
     }
+  };
+
+  const commitPickerValue = (type: 'morning' | 'evening') => {
+    const d = type === 'morning' ? morningPickerDate : eveningPickerDate;
+    const h = d.getHours().toString().padStart(2, '0');
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const timeStr = `${h}:${m}`;
+    if (type === 'morning') {
+      setMorningTime(timeStr);
+      setShowMorningPicker(false);
+    } else {
+      setEveningTime(timeStr);
+      setShowEveningPicker(false);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const openSettings = () => {
+    const morning = user.reminderTimes?.morning || '08:00';
+    const evening = user.reminderTimes?.evening || '20:00';
+    setMorningTime(morning);
+    setEveningTime(evening);
+    setMorningPickerDate(getTimeDate(morning));
+    setEveningPickerDate(getTimeDate(evening));
+    setShowMorningPicker(false);
+    setShowEveningPicker(false);
+    setShowSettings(true);
   };
 
   const completedCount = rituals.filter(r => r.isCompleted).length;
@@ -79,9 +115,9 @@ export const DailyAligner: React.FC = () => {
   };
 
   const handleAddRitual = () => {
-    if (newRitualTitle.trim()) {
-      addRitual(newRitualTitle.trim());
-      setNewRitualTitle('');
+    if (newTargetTitle.trim()) {
+      addRitual(newTargetTitle.trim());
+      setNewTargetTitle('');
       setIsAdding(false);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
@@ -122,14 +158,14 @@ export const DailyAligner: React.FC = () => {
               )}
             </View>
             <View>
-              <Text className="text-[14px] text-gold font-black uppercase tracking-[5px] mb-2">Welcome Home</Text>
+              <Text className="text-[14px] text-gold font-black uppercase tracking-[5px] mb-2">VISION BOARD</Text>
               <Text className="text-5xl font-black text-white tracking-tighter">{user.name.split(' ')[0]}</Text>
             </View>
           </View>
           <TouchableOpacity
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowSettings(true);
+              openSettings();
             }}
             className="w-12 h-12 rounded-2xl bg-surface/50 border border-white/10 items-center justify-center"
           >
@@ -143,7 +179,7 @@ export const DailyAligner: React.FC = () => {
             <View className="flex-row justify-between items-center mb-8">
               <View className="flex-row items-center gap-2">
                 <View className="w-1.5 h-1.5 rounded-full bg-gold shadow-lg shadow-gold/50" />
-                <Text className="text-[11px] tracking-[2px] text-gold font-black uppercase">QUANTUM PROGRAMMING</Text>
+                <Text className="text-[11px] tracking-[2px] text-gold font-black uppercase">DAILY AFFIRMATIONS</Text>
               </View>
               <TouchableOpacity onPress={handleRefreshAffirmation} className="bg-white/5 p-2 rounded-[12px] border border-white/10 active:scale-90">
                 {loadingAffirmation ? <ActivityIndicator size="small" color="#F4E0B9" /> : <RefreshCw size={14} color="#6B7280" />}
@@ -155,7 +191,7 @@ export const DailyAligner: React.FC = () => {
               {affirmation.isAcknowledged ? (
                 <BlurView intensity={30} tint="light" className="px-6 py-3 rounded-full border border-gold/40 overflow-hidden flex-row items-center gap-2">
                   <CheckCircle2 size={16} color="#F4E0B9" />
-                  <Text className="text-gold-bright text-xs font-bold uppercase tracking-widest">Quantum State Locked</Text>
+                  <Text className="text-gold-bright text-xs font-bold uppercase tracking-widest">Affirmed</Text>
                 </BlurView>
               ) : (
                 <Button
@@ -175,54 +211,13 @@ export const DailyAligner: React.FC = () => {
           </View>
         </View>
 
-        {/* Frequency Tuner (Gratitude) */}
-        <View className="mb-8">
-          <View className="flex-row items-center gap-2 mb-4 ml-1">
-            <Heart size={18} color="#F4E0B9" />
-            <Text className="text-[14px] font-black text-white uppercase tracking-[2px]">Frequency Tuner</Text>
-          </View>
-          <View className="bg-surface/20 border border-white/5 rounded-[20px] p-4 shadow-xl">
-            {todaysGratitude.length < 3 ? (
-              <View className="flex-row items-center gap-3 bg-void/30 rounded-[16px] border border-white/5 overflow-hidden">
-                <View className="flex-1">
-                  <Input
-                    value={gratitudeInput}
-                    onChangeText={setGratitudeInput}
-                    placeholder="I am grateful for..."
-                    returnKeyType="done"
-                    onSubmitEditing={handleAddGratitude}
-                  />
-                </View>
-                <TouchableOpacity
-                  onPress={handleAddGratitude}
-                  disabled={!gratitudeInput.trim()}
-                  className="bg-gold/10 p-2.5 rounded-[12px] border border-gold/20 active:scale-90 mb-5 mr-3"
-                >
-                  <Plus size={20} color="#F4E0B9" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View className="items-center py-2">
-                <Text className="text-gold-bright text-xs font-bold uppercase tracking-[3px]">Frequency Raised</Text>
-              </View>
-            )}
-            <View className="mt-6 gap-3">
-              {todaysGratitude.map((g) => (
-                <BlurView key={g.id} intensity={10} tint="light" className="flex-row items-center gap-3 px-4 py-3 rounded-[12px] border border-white/5 overflow-hidden">
-                  <Heart size={10} color="#F4E0B9" fill="#F4E0B9" />
-                  <Text className="text-sm text-white font-bold leading-5">{g.text}</Text>
-                </BlurView>
-              ))}
-            </View>
-          </View>
-        </View>
 
         {/* Rituals */}
         <View className="mb-8">
           <View className="flex-row justify-between items-center mb-4 ml-1">
             <View className="flex-row items-center gap-2">
               <LayoutDashboard size={18} color="#F4E0B9" />
-              <Text className="text-[14px] font-black text-white uppercase tracking-[2px]">Daily Rituals</Text>
+              <Text className="text-[14px] font-black text-white uppercase tracking-[2px]">Set Targets</Text>
             </View>
             <View className="flex-row items-center gap-3">
               <TouchableOpacity
@@ -243,36 +238,10 @@ export const DailyAligner: React.FC = () => {
           </View>
 
           <View className="gap-3">
-            {isAdding && (
-              <View className="mb-4">
-                <Input
-                  value={newRitualTitle}
-                  onChangeText={setNewRitualTitle}
-                  placeholder="Lock in new ritual..."
-                  autoFocus
-                />
-                <View className="flex-row gap-3 -mt-2">
-                  <TouchableOpacity onPress={handleAddRitual} className="flex-1 bg-gold h-12 rounded-[14px] items-center justify-center active:scale-95 transition-all">
-                    <Text className="text-void font-bold uppercase text-xs tracking-widest">Add Ritual</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setIsAdding(false)} className="flex-1 bg-surface/50 h-12 rounded-[14px] items-center justify-center border border-white/10 active:scale-95 transition-all">
-                    <Text className="text-white/60 font-bold uppercase text-xs tracking-widest">Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
 
             {rituals.length === 0 && !isAdding ? (
               <View className="py-12 items-center justify-center opacity-60">
-                <Text className="text-gray-400 text-xs font-bold uppercase tracking-[2px]">No Active Rituals</Text>
-              </View>
-            ) : isAllComplete ? (
-              <View className="bg-surface/30 p-10 rounded-[32px] border border-gold/30 items-center justify-center overflow-hidden mb-4 shadow-2xl">
-                <View className="w-20 h-20 rounded-full bg-gold items-center justify-center shadow-2xl shadow-gold/40 mb-6">
-                  <CheckCircle2 size={40} color="#050505" strokeWidth={3} />
-                </View>
-                <Text className="text-2xl font-black text-white text-center tracking-tighter mb-2">Universe Aligned</Text>
-                <Text className="text-white/80 text-sm font-bold uppercase tracking-widest text-center leading-5 px-4">Your frequency is optimized for high-performance manifestation</Text>
+                <Text className="text-gray-400 text-xs font-bold uppercase tracking-[2px]">No Active Targets</Text>
               </View>
             ) : rituals.map(ritual => (
               <TouchableOpacity
@@ -290,9 +259,14 @@ export const DailyAligner: React.FC = () => {
                 <View className={`w-6 h-6 rounded-full border-2 items-center justify-center ${ritual.isCompleted ? 'bg-gold border-gold' : 'border-gold/30'}`}>
                   {ritual.isCompleted && <CheckCircle2 size={14} color="#050505" strokeWidth={4} />}
                 </View>
-                <Text className={`flex-1 text-xl font-black tracking-tight ${ritual.isCompleted ? 'text-gold opacity-60 line-through' : 'text-white'}`}>
-                  {ritual.title}
-                </Text>
+                <View className="flex-1">
+                  <Text className={`text-xl font-black tracking-tight ${ritual.isCompleted ? 'text-gold opacity-60 line-through' : 'text-white'}`}>
+                    {ritual.title}
+                  </Text>
+                  <Text className={`text-[10px] font-bold uppercase tracking-widest ${ritual.isCompleted ? 'text-gold/40' : 'text-gold/60'}`}>
+                    {goals.find(g => g.id === ritual.goalId)?.title || 'General'}
+                  </Text>
+                </View>
                 <TouchableOpacity
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
@@ -308,19 +282,115 @@ export const DailyAligner: React.FC = () => {
         </View>
       </ScrollView>
 
+      {/* Add Target Modal — bottom sheet, always above keyboard */}
+      <Modal
+        visible={isAdding}
+        transparent
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => { setIsAdding(false); setNewTargetTitle(''); }}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1, justifyContent: 'flex-end' }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Tap backdrop to cancel */}
+          <TouchableOpacity
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }}
+            activeOpacity={1}
+            onPress={() => { setIsAdding(false); setNewTargetTitle(''); Keyboard.dismiss(); }}
+          />
+
+          {/* Sheet */}
+          <View style={{
+            backgroundColor: '#121212',
+            borderTopLeftRadius: 28,
+            borderTopRightRadius: 28,
+            paddingHorizontal: 20,
+            paddingTop: 12,
+            paddingBottom: 32,
+            borderTopWidth: 1,
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}>
+            {/* Handle */}
+            <View style={{ width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 2, alignSelf: 'center', marginBottom: 24 }} />
+
+            <Text style={{ color: '#F4E0B9', fontSize: 11, fontWeight: '800', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 14 }}>
+              New Target
+            </Text>
+
+            <TextInput
+              autoFocus
+              value={newTargetTitle}
+              onChangeText={setNewTargetTitle}
+              placeholder="e.g. Gym every morning..."
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              returnKeyType="done"
+              onSubmitEditing={handleAddRitual}
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.06)',
+                borderWidth: 1.5,
+                borderColor: '#F4E0B9',
+                borderRadius: 16,
+                color: '#fff',
+                fontSize: 17,
+                paddingHorizontal: 18,
+                paddingVertical: 16,
+                marginBottom: 16,
+              }}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={handleAddRitual}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#F4E0B9',
+                  height: 52,
+                  borderRadius: 16,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text style={{ color: '#050505', fontWeight: '800', fontSize: 13, letterSpacing: 2, textTransform: 'uppercase' }}>Add Target</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setIsAdding(false); setNewTargetTitle(''); Keyboard.dismiss(); }}
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 16,
+                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.1)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <X size={20} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
+
+
       {/* Settings Modal - Optimized Time Picker */}
       <Modal visible={showSettings || !user.hasSetSchedule} animationType="fade" transparent={true} statusBarTranslucent>
         <BlurView intensity={80} tint="dark" className="flex-1 justify-center p-8">
           <View className="bg-surface/90 rounded-[32px] border border-white/10 p-8 shadow-2xl overflow-hidden">
-            <Text className="text-4xl font-black text-white mb-2 tracking-tighter">Your Rhythm</Text>
-            <Text className="text-gray-300 text-base mb-10 font-bold">Synchronize your life with the universe.</Text>
+            <Text className="text-4xl font-black text-white mb-2 tracking-tighter">Daily Reminders</Text>
+            <Text className="text-gray-300 text-base mb-10 font-bold">Set times to receive your daily affirmations.</Text>
 
             <View className="gap-8 mb-12">
               <View>
-                <Text className="text-[13px] text-gold/90 font-black uppercase tracking-[3px] mb-4 ml-1">Morning Intention</Text>
+                <Text className="text-[13px] text-gold/90 font-black uppercase tracking-[3px] mb-4 ml-1">MORNING AFFIRMATION</Text>
                 <TouchableOpacity
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setMorningPickerDate(getTimeDate(morningTime));
                     setShowMorningPicker(!showMorningPicker);
                     setShowEveningPicker(false);
                   }}
@@ -329,21 +399,33 @@ export const DailyAligner: React.FC = () => {
                   <Text className="text-3xl font-black text-white tracking-widest">{formatTimeForDisplay(morningTime)}</Text>
                 </TouchableOpacity>
                 {showMorningPicker && (
-                  <DateTimePicker
-                    value={getTimeDate(morningTime)}
-                    mode="time"
-                    is24Hour={false}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, date) => onTimeChange('morning', event, date)}
-                  />
+                  <View>
+                    <DateTimePicker
+                      value={morningPickerDate}
+                      mode="time"
+                      is24Hour={false}
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={(event, date) => onTimeChange('morning', event, date)}
+                      textColor="#FFFFFF"
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity
+                        onPress={() => commitPickerValue('morning')}
+                        className="bg-gold/20 border border-gold/40 rounded-[16px] py-3 mx-4 mt-1 items-center"
+                      >
+                        <Text className="text-gold font-black uppercase tracking-widest text-sm">Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
               </View>
 
               <View>
-                <Text className="text-[13px] text-gold/90 font-black uppercase tracking-[3px] mb-4 ml-1">Evening Gratitude</Text>
+                <Text className="text-[13px] text-gold/90 font-black uppercase tracking-[3px] mb-4 ml-1">EVENING AFFIRMATION</Text>
                 <TouchableOpacity
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setEveningPickerDate(getTimeDate(eveningTime));
                     setShowEveningPicker(!showEveningPicker);
                     setShowMorningPicker(false);
                   }}
@@ -352,17 +434,28 @@ export const DailyAligner: React.FC = () => {
                   <Text className="text-3xl font-black text-white tracking-widest">{formatTimeForDisplay(eveningTime)}</Text>
                 </TouchableOpacity>
                 {showEveningPicker && (
-                  <DateTimePicker
-                    value={getTimeDate(eveningTime)}
-                    mode="time"
-                    is24Hour={false}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, date) => onTimeChange('evening', event, date)}
-                  />
+                  <View>
+                    <DateTimePicker
+                      value={eveningPickerDate}
+                      mode="time"
+                      is24Hour={false}
+                      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                      onChange={(event, date) => onTimeChange('evening', event, date)}
+                      textColor="#FFFFFF"
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity
+                        onPress={() => commitPickerValue('evening')}
+                        className="bg-gold/20 border border-gold/40 rounded-[16px] py-3 mx-4 mt-1 items-center"
+                      >
+                        <Text className="text-gold font-black uppercase tracking-widest text-sm">Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 )}
               </View>
             </View>
-            <Button onPress={saveSettings}>Lock In Frequency</Button>
+            <Button onPress={saveSettings}>SAVE REMINDERS</Button>
           </View>
         </BlurView>
       </Modal>

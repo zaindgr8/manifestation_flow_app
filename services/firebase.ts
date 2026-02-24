@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { initializeAuth, // @ts-ignore
   getReactNativePersistence, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -24,6 +25,7 @@ const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Use Emulators ONLY if EXPO_PUBLIC_USE_FIREBASE_EMULATOR is 'true'
 if (__DEV__ && process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
@@ -38,4 +40,4 @@ if (__DEV__ && process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATOR === 'true') {
   }
 }
 
-export { auth, db };
+export { auth, db, storage };

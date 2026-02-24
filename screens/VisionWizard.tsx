@@ -8,7 +8,8 @@ import {
   Modal,
   Platform,
   StyleSheet,
-  Dimensions
+  Dimensions,
+  KeyboardAvoidingView
 } from 'react-native';
 import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { useManifest } from '../context/ManifestContext';
@@ -21,21 +22,21 @@ import * as Haptics from 'expo-haptics';
 const { width } = Dimensions.get('window');
 
 const GOAL_PLACEHOLDERS: Record<string, string> = {
-  'Travel & Adventure': 'e.g., Two weeks in Kyoto...',
-  'Business & Career': 'e.g., $100k/month revenue...',
-  'Love & Relation': 'e.g., Meeting my soulmate...',
-  'Health & Beauty': 'e.g., Run a marathon...',
-  'Dream Car': 'e.g., Porsche 911 GT3 RS...',
-  'Dream Home': 'e.g., Beachfront villa...',
+  'Travel & Adventure': 'e.g., 2 weeks in Japan',
+  'Business & Career': 'e.g., Hit $10k/month',
+  'Love & Relation': 'e.g., Found my soulmate',
+  'Health & Beauty': 'e.g., Run a marathon',
+  'Dream Car': 'e.g., My new Porsche',
+  'Dream Home': 'e.g., Beachfront villa',
 };
 
-const RITUAL_PLACEHOLDERS: Record<string, string> = {
-  'Travel & Adventure': 'e.g., Save $50 daily...',
-  'Business & Career': 'e.g., Call 5 leads before noon...',
-  'Love & Relation': 'e.g., Practice active listening...',
-  'Health & Beauty': 'e.g., Drink 3L water...',
-  'Dream Car': 'e.g., Save $200/month...',
-  'Dream Home': 'e.g., Check listings daily...',
+const TARGET_PLACEHOLDERS: Record<string, string> = {
+  'Travel & Adventure': 'e.g., Book the flights',
+  'Business & Career': 'e.g., Sign 5 clients',
+  'Love & Relation': 'e.g., Plan date night',
+  'Health & Beauty': 'e.g., Abs showing',
+  'Dream Car': 'e.g., Pay the deposit',
+  'Dream Home': 'e.g., Get pre-approved',
 };
 
 type CategoryData = {
@@ -44,29 +45,8 @@ type CategoryData = {
   rituals: string[];
 };
 
-/**
- * REDESIGNED VISION WIZARD
- * Standardized spacing, pure StyleSheet for layout precision, and Gold/Void theme.
- * Old code preserved in comments below.
- */
-
-/*
-// ──────────────────────────────────────────────────────────────────────────────
-// OLD VERSION (Preserved for reference as requested)
-// ──────────────────────────────────────────────────────────────────────────────
-export const VisionWizardOld: React.FC = () => {
-  // ... original state and logic ...
-  return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100, paddingTop: 64 }} className="bg-void">
-       ... (NativeWind implementation) ...
-    </ScrollView>
-  );
-};
-// ──────────────────────────────────────────────────────────────────────────────
-*/
-
 export const VisionWizard: React.FC = () => {
-  const { addGoalAndRitual, setScreen, goals } = useManifest();
+  const { addGoalAndRitual, setScreen } = useManifest();
   const [phase, setPhase] = useState<'SELECTION' | 'DEFINITION'>('SELECTION');
   const [availableCategories, setAvailableCategories] = useState<string[]>([
     'Travel & Adventure', 'Business & Career', 'Love & Relation', 'Health & Beauty', 'Dream Car', 'Dream Home'
@@ -76,17 +56,15 @@ export const VisionWizard: React.FC = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [flowIndex, setFlowIndex] = useState(0);
   const [formData, setFormData] = useState<Record<string, CategoryData>>({});
-  const [currentRitualInput, setCurrentRitualInput] = useState('');
+  const [currentTargetInput, setCurrentTargetInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const currentCategoryIndex = Math.floor(flowIndex / 2);
   const currentCategory = selectedCategories[currentCategoryIndex];
-  const isRitualStep = flowIndex % 2 === 1;
-  const activeCategories = new Set(goals.flatMap(g => g.categories));
+  const isTargetStep = flowIndex % 2 === 1;
 
   const toggleCategory = (cat: string) => {
-    if (activeCategories.has(cat)) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedCategories(prev => prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]);
   };
@@ -112,16 +90,16 @@ export const VisionWizard: React.FC = () => {
     }));
   };
 
-  const addRitualToCurrent = () => {
-    if (currentRitualInput.trim()) {
+  const addTargetToCurrent = () => {
+    if (currentTargetInput.trim()) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const currentRituals = formData[currentCategory]?.rituals || [];
-      updateFormData('rituals', [...currentRituals, currentRitualInput.trim()]);
-      setCurrentRitualInput('');
+      updateFormData('rituals', [...currentRituals, currentTargetInput.trim()]);
+      setCurrentTargetInput('');
     }
   };
 
-  const removeRitualFromCurrent = (index: number) => {
+  const removeTargetFromCurrent = (index: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const currentRituals = formData[currentCategory]?.rituals || [];
     updateFormData('rituals', currentRituals.filter((_, i) => i !== index));
@@ -139,10 +117,10 @@ export const VisionWizard: React.FC = () => {
       setPhase('DEFINITION');
       setFlowIndex(0);
     } else {
-      if (isRitualStep) {
+      if (isTargetStep) {
         const rituals = formData[currentCategory]?.rituals || [];
-        if (rituals.length === 0 && !currentRitualInput.trim()) return;
-        if (currentRitualInput.trim()) { addRitualToCurrent(); }
+        if (rituals.length === 0 && !currentTargetInput.trim()) return;
+        if (currentTargetInput.trim()) { addTargetToCurrent(); }
         if (flowIndex === (selectedCategories.length * 2) - 1) { handleSubmitAll(); }
         else { setFlowIndex(prev => prev + 1); }
       } else {
@@ -169,7 +147,13 @@ export const VisionWizard: React.FC = () => {
     try {
       for (const cat of selectedCategories) {
         const data = formData[cat];
-        if (data) { await addGoalAndRitual({ categories: [cat], title: data.title, targetDate: data.targetDate }, data.rituals); }
+        if (data) { 
+            await addGoalAndRitual({ 
+                categories: [cat], 
+                title: data.title, 
+                targetDate: data.targetDate 
+            }, data.rituals); 
+        }
       }
       setScreen('TIMELINE');
     } catch (e) { setIsSubmitting(false); }
@@ -204,9 +188,9 @@ export const VisionWizard: React.FC = () => {
           {phase === 'SELECTION' ? (
             <View style={styles.selectionView}>
               <View style={styles.textSection}>
-                <Text style={styles.kicker}>INTENTIONALITY</Text>
-                <Text style={styles.title}>Select Areas</Text>
-                <Text style={styles.subtitle}>WHERE WILL YOU FOCUS YOUR ENERGY?</Text>
+                <Text style={styles.kicker}>YOUR FOCUS</Text>
+                <Text style={styles.title}>What to Manifest?</Text>
+                <Text style={styles.subtitle}>CHOOSE WHERE TO FOCUS YOUR ENERGY.</Text>
               </View>
 
               <View style={styles.categoryGrid}>
@@ -256,10 +240,10 @@ export const VisionWizard: React.FC = () => {
             </View>
           ) : (
             <View style={styles.definitionView}>
-              {!isRitualStep ? (
+              {!isTargetStep ? (
                 <View style={styles.stepWrapper}>
                   <View style={styles.textSection}>
-                    <Text style={styles.kicker}>DEFINITION</Text>
+                    <Text style={styles.kicker}>THE DETAILS</Text>
                     <Text style={styles.titleSmall}>Define your Dream</Text>
                     <View style={styles.categoryBadgeWrapper}>
                       <BlurView intensity={20} tint="light" style={styles.categoryBadge}>
@@ -271,7 +255,7 @@ export const VisionWizard: React.FC = () => {
                   <BlurView intensity={10} tint="dark" style={styles.card}>
                     <View style={styles.formGap}>
                       <Input
-                        label="WHAT DO YOU SEE?"
+                        label="YOUR GOAL"
                         placeholder={GOAL_PLACEHOLDERS[currentCategory] || "Describe your vision..."}
                         value={formData[currentCategory]?.title}
                         onChangeText={t => updateFormData('title', t)}
@@ -282,7 +266,7 @@ export const VisionWizard: React.FC = () => {
                           <Input
                             label="TIMELINE"
                             placeholder="When does this arrive?"
-                            value={formData[currentCategory]?.targetDate ? `Expected by ${formData[currentCategory]?.targetDate}` : ""}
+                            value={formData[currentCategory]?.targetDate ? `Manifest by ${formData[currentCategory]?.targetDate}` : ""}
                             editable={false}
                           />
                         </View>
@@ -296,7 +280,7 @@ export const VisionWizard: React.FC = () => {
                               mode="date"
                               themeVariant="dark"
                               accentColor="#F4E0B9"
-                              display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                               onChange={(event, date) => {
                                 if (Platform.OS === 'android' && event.type === 'set') setShowDatePicker(false);
                                 if (date) {
@@ -309,9 +293,14 @@ export const VisionWizard: React.FC = () => {
                             {Platform.OS === 'ios' && (
                               <TouchableOpacity
                                 style={styles.datePickerDone}
-                                onPress={() => setShowDatePicker(false)}
+                                onPress={() => {
+                                  if (!formData[currentCategory]?.targetDate) {
+                                    updateFormData('targetDate', new Date().toISOString().split('T')[0]);
+                                  }
+                                  setShowDatePicker(false);
+                                }}
                               >
-                                <Text style={styles.datePickerDoneText}>Confirm Date</Text>
+                                <Text style={styles.datePickerDoneText}>Confirm</Text>
                               </TouchableOpacity>
                             )}
                           </BlurView>
@@ -328,9 +317,9 @@ export const VisionWizard: React.FC = () => {
               ) : (
                 <View style={styles.stepWrapper}>
                   <View style={styles.textSection}>
-                    <Text style={styles.kicker}>THE BRIDGE</Text>
-                    <Text style={styles.titleSmall}>Daily Action</Text>
-                    <Text style={styles.subtitleSmall}>WHAT REPEATED RITUALS WILL ANCHOR THIS REALITY FOR {currentCategory}?</Text>
+                    <Text style={styles.kicker}>YOUR TARGETS</Text>
+                    <Text style={styles.titleSmall}>Your Targets</Text>
+                    <Text style={styles.subtitleSmall}>What specific milestones will lead you to your ultimate goal for {currentCategory}?</Text>
                   </View>
 
                   <BlurView intensity={10} tint="dark" style={styles.card}>
@@ -338,14 +327,14 @@ export const VisionWizard: React.FC = () => {
                       <View style={styles.ritualInputRow}>
                         <View style={styles.flex1}>
                           <Input
-                            label="ADD A RITUAL"
-                            placeholder={RITUAL_PLACEHOLDERS[currentCategory] || "Describe the action..."}
-                            value={currentRitualInput}
-                            onChangeText={setCurrentRitualInput}
+                            label="ADD A TARGET"
+                            placeholder={TARGET_PLACEHOLDERS[currentCategory] || "e.g., Secure flight tickets..."}
+                            value={currentTargetInput}
+                            onChangeText={setCurrentTargetInput}
                           />
                         </View>
                         <TouchableOpacity
-                          onPress={addRitualToCurrent}
+                          onPress={addTargetToCurrent}
                           style={styles.addRitualBtn}
                         >
                           <Plus size={24} color="#F4E0B9" />
@@ -358,7 +347,7 @@ export const VisionWizard: React.FC = () => {
                             <View key={i} style={styles.ritualItem}>
                               <Text style={styles.ritualItemText}>{r}</Text>
                               <TouchableOpacity
-                                onPress={() => removeRitualFromCurrent(i)}
+                                onPress={() => removeTargetFromCurrent(i)}
                                 style={styles.ritualRemoveBtn}
                               >
                                 <X size={14} color="rgba(255, 255, 255, 0.4)" />
@@ -372,7 +361,7 @@ export const VisionWizard: React.FC = () => {
                         <View style={styles.flex1}><Button variant="secondary" onPress={handleBack}>Back</Button></View>
                         <View style={styles.flex1}>
                           <Button onPress={handleNext} loading={isSubmitting}>
-                            {flowIndex === (selectedCategories.length * 2) - 1 ? "Collapse" : "Next"}
+                            {flowIndex === (selectedCategories.length * 2) - 1 ? "DONE" : "Next"}
                           </Button>
                         </View>
                       </View>
@@ -387,29 +376,34 @@ export const VisionWizard: React.FC = () => {
 
       {/* Custom Category Modal */}
       <Modal visible={isAddingCustom} transparent={true} animationType="fade" statusBarTranslucent>
-        <BlurView intensity={80} tint="dark" style={styles.modalBg}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>New Portal</Text>
-            <Text style={styles.modalSub}>Define an area not captured by the collective.</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <BlurView intensity={80} tint="dark" style={styles.modalBg}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Custom Focus</Text>
+              <Text style={styles.modalSub}>What else would you like to manifest?</Text>
 
-            <Input
-              autoFocus
-              label="AREA OF FOCUS"
-              placeholder="e.g., Spiritual Mastery"
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-            />
+              <Input
+                autoFocus
+                label="AREA OF FOCUS"
+                placeholder="e.g., Spiritual Mastery"
+                value={newCategoryName}
+                onChangeText={setNewCategoryName}
+              />
 
-            <View style={styles.modalActions}>
-              <View style={styles.flex1}>
-                <Button variant="secondary" onPress={() => setIsAddingCustom(false)}>Cancel</Button>
-              </View>
-              <View style={styles.flex1}>
-                <Button onPress={handleAddCustomCategory}>Open Portal</Button>
+              <View style={styles.modalActions}>
+                <View style={styles.flex1}>
+                  <Button variant="secondary" onPress={() => setIsAddingCustom(false)}>Cancel</Button>
+                </View>
+                <View style={styles.flex1}>
+                  <Button onPress={handleAddCustomCategory}>CREATE</Button>
+                </View>
               </View>
             </View>
-          </View>
-        </BlurView>
+          </BlurView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -617,20 +611,24 @@ const styles = StyleSheet.create({
   },
   datePickerWrapper: {
     marginTop: -8,
+    marginHorizontal: -16,
     borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   datePickerBlur: {
-    padding: 16,
+    padding: 8,
+    alignItems: 'center',
   },
   datePickerDone: {
     backgroundColor: '#F4E0B9',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
+    marginHorizontal: 8,
   },
   datePickerDoneText: {
     color: '#050505',
@@ -687,6 +685,7 @@ const styles = StyleSheet.create({
   },
   modalBg: {
     flex: 1,
+    backgroundColor: 'rgba(5, 5, 5, 0.85)',
     justifyContent: 'center',
     padding: 24,
   },

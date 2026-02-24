@@ -10,9 +10,11 @@ import { DailyAligner } from './screens/DailyAligner';
 import { LifestyleSimulator } from './screens/LifestyleSimulator';
 import { AuthScreen } from './screens/Auth';
 import { ProfileScreen } from './screens/Profile';
+import { StoreScreen } from './screens/Store';
 import { LayoutDashboard, Calendar, Wand2, Loader2, User } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { requestNotificationPermissions } from './services/notificationService';
 
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
@@ -30,6 +32,9 @@ const AppContent = () => {
                 console.warn("RevenueCat failed to initialize (likely running in Expo Go w/o Dev Client). Ignoring.");
             }
         }
+
+        // Request Push Notification Permissions
+        requestNotificationPermissions();
     }, []);
 
   const { currentScreen, setScreen, user, authUser, authLoading, isGuestMode } = useManifest();
@@ -57,12 +62,13 @@ const AppContent = () => {
       case 'ALIGNER': return <DailyAligner />;
       case 'SIMULATOR': return <LifestyleSimulator />;
       case 'PROFILE': return <ProfileScreen />;
+      case 'STORE': return <StoreScreen />;
       default: return <Onboarding />;
     }
   };
 
-  // Bottom Tab Bar (Only show if onboarded)
-  const ShowTabBar = user.isOnboarded && currentScreen !== 'ONBOARDING' && currentScreen !== 'WIZARD';
+  // Bottom Tab Bar (Only show if onboarded and on main screens)
+  const ShowTabBar = currentScreen !== 'ONBOARDING' && currentScreen !== 'WIZARD' && currentScreen !== 'STORE';
 
   return (
     <SafeAreaView className="flex-1 bg-void" edges={['top', 'left', 'right']}>
@@ -132,7 +138,7 @@ const AppContent = () => {
               className="flex-1 items-center justify-center h-full active:scale-90 transition-transform"
             >
               <User size={22} color={currentScreen === 'PROFILE' ? '#F4E0B9' : '#9CA3AF'} strokeWidth={2.5} />
-              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'PROFILE' ? 'text-gold' : 'text-gray-400'}`}>You</Text>
+              <Text className={`text-[9px] font-bold uppercase tracking-[1.5px] mt-1.5 ${currentScreen === 'PROFILE' ? 'text-gold' : 'text-gray-400'}`}>PROFILE</Text>
             </TouchableOpacity>
 
           </BlurView>

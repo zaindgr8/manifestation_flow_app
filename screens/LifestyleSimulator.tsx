@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   StyleSheet,
   Dimensions,
-  Platform
+  Platform,
+  Alert
 } from 'react-native';
 import { useManifest } from '../context/ManifestContext';
 import { Button } from '../components/Button';
@@ -53,7 +54,7 @@ export const LifestyleSimulatorOld: React.FC = () => {
 */
 
 export const LifestyleSimulator: React.FC = () => {
-  const { user, lifestyleHistory, addToLifestyleHistory, goals, updateUser } = useManifest();
+  const { user, lifestyleHistory, addToLifestyleHistory, goals, updateUser, deductCredits, setScreen, simulateLifestyle } = useManifest();
   const [description, setDescription] = useState('');
   const [currentImage, setCurrentImage] = useState<string | null>(user.selfieUrl);
   const [generatedResult, setGeneratedResult] = useState<string | null>(null);
@@ -84,40 +85,50 @@ export const LifestyleSimulator: React.FC = () => {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true, // Avoid blob: URLs in tunnel/web context
     });
     if (!result.canceled) {
-      setCurrentImage(result.assets[0].uri);
+      const asset = result.assets[0];
+      if (!asset.base64 && asset.uri.startsWith('blob:')) {
+        alert('Image could not be processed. Please try again or use a different image.');
+        return;
+      }
+      // Prefer base64 to avoid blob: URL issues in Expo Go / Replit tunnel
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : asset.uri;
+      setCurrentImage(imageUri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   };
 
   const handleSimulate = async () => {
     if (!currentImage || !description) return;
-    if ((user.credits?.balance || 0) <= 0) {
-      alert("You have run out of Cosmic Credits. Top up to continue shifting realities.");
-      return;
-    }
-
+    
     setIsLoading(true);
     setGeneratedResult(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
     try {
-      const result = await generateLifestyleSimulation(currentImage, description);
+      const result = await simulateLifestyle(currentImage, description);
       if (result) {
         setGeneratedResult(result);
-        addToLifestyleHistory({ imageUrl: result, prompt: description });
-        updateUser({
-          credits: {
-            ...user.credits!,
-            balance: (user.credits?.balance || 0) - 1,
-            lifetimeUsed: (user.credits?.lifetimeUsed || 0) + 1
-          }
-        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-    } catch (e) {
-      console.error(e);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch (e: any) {
+      if (e.message === 'INSUFFICIENT_ENERGY') {
+        Alert.alert(
+          "Insufficient Credits", 
+          "You need 5 Energy for a Lifestyle Shift. Top up at the Cosmic Exchange.",
+          [
+            { text: "Later", style: "cancel" },
+            { text: "Go to Store", onPress: () => setScreen('STORE') }
+          ]
+        );
+      } else {
+        console.error(e);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -135,49 +146,39 @@ export const LifestyleSimulator: React.FC = () => {
             <Wand2 size={24} color="#F4E0B9" />
           </View>
           <View>
-            <Text style={styles.headerTitle}>Reality Shifter</Text>
-            <Text style={styles.headerKicker}>COLLAPSE THE TIMELINE</Text>
+            <Text style={styles.headerTitle}>VISUALIZE</Text>
+            <Text style={styles.headerKicker}>See yourself living your new reality.</Text>
           </View>
         </View>
 
         <View style={styles.mainContent}>
-          {/* Result Preview */}
+          {/* Inline Result Preview — stays at top, never blocks page */}
           {generatedResult && (
             <View style={styles.resultCard}>
-              <BlurView intensity={40} tint="dark" style={styles.resultBlur}>
-                <View style={styles.resultHeader}>
-                  <Text style={styles.resultTitle}>Your New Timeline</Text>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                      setGeneratedResult(null);
-                    }}
-                    style={styles.resetBtn}
-                  >
-                    <Text style={styles.resetBtnText}>RESET PORTAL</Text>
-                  </TouchableOpacity>
+              <View style={styles.resultHeader}>
+                <Text style={styles.resultTitle}>Your New Reality</Text>
+                <View style={styles.resultBadge}>
+                  <Text style={styles.resultBadgeText}>✓ GENERATED</Text>
                 </View>
-
-                <View style={styles.resultImageWrapper}>
-                  <Image source={{ uri: generatedResult! }} style={styles.fullImage} />
-                </View>
-
-                <View style={styles.resultPromptBox}>
-                  <Text style={styles.resultPromptLabel}>MANIFESTED INTENT</Text>
-                  <Text style={styles.resultPromptText}>"{description}"</Text>
-                </View>
-              </BlurView>
+              </View>
+              <View style={styles.resultImageWrapper}>
+                <Image source={{ uri: generatedResult }} style={styles.fullImage} />
+              </View>
+              <View style={styles.resultPromptBox}>
+                <Text style={styles.resultPromptLabel}>GENERATED PROMPT</Text>
+                <Text style={styles.resultPromptText}>"{description}"</Text>
+              </View>
             </View>
           )}
 
-          {/* Input Controls */}
-          <View style={[styles.controlsContainer, generatedResult && styles.controlsDisabled]}>
+          {/* Input Controls — always fully interactive */}
+          <View style={styles.controlsContainer}>
             {/* Identity Anchor Section */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionLabelWrapper}>
                   <View style={styles.goldDot} />
-                  <Text style={styles.sectionLabel}>IDENTITY ANCHOR</Text>
+                  <Text style={styles.sectionLabel}>YOUR PHOTO</Text>
                 </View>
                 <TouchableOpacity onPress={pickImage} style={styles.uploadBtn}>
                   <Upload size={14} color="#F4E0B9" />
@@ -194,7 +195,7 @@ export const LifestyleSimulator: React.FC = () => {
                 </View>
                 <View style={styles.anchorTextWrapper}>
                   <Text style={styles.anchorDesc}>
-                    We use this image to project your quantum identity into the target timeline.
+                    We will use this image to generate an image of your future self.
                   </Text>
                 </View>
               </View>
@@ -204,7 +205,7 @@ export const LifestyleSimulator: React.FC = () => {
             <View style={styles.realitySection}>
               <View style={styles.sectionLabelWrapperSmall}>
                 <View style={styles.goldDot} />
-                <Text style={styles.sectionLabel}>DESCRIBE YOUR REALITY</Text>
+                <Text style={styles.sectionLabel}>DESCRIBE YOUR NEW REALITY</Text>
               </View>
 
               <View style={styles.inputCard}>
@@ -223,7 +224,7 @@ export const LifestyleSimulator: React.FC = () => {
                 <View style={styles.inputFooter}>
                   <View style={styles.suggestionLabelWrapper}>
                     <Lightbulb size={16} color="#F4E0B9" />
-                    <Text style={styles.suggestionLabelText}>QUANTUM SUGGESTIONS</Text>
+                    <Text style={styles.suggestionLabelText}>SUGGESTED PROMPTS</Text>
                   </View>
                   <TouchableOpacity
                     onPress={() => {
@@ -264,7 +265,7 @@ export const LifestyleSimulator: React.FC = () => {
               onPress={handleSimulate}
               loading={isLoading}
             >
-              Visualize Reality
+              {generatedResult ? 'Regenerate' : 'Visualize Now'}
             </Button>
           </View>
 
@@ -355,15 +356,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(244, 224, 185, 0.3)',
     backgroundColor: 'rgba(15, 15, 15, 0.5)',
+    padding: 24,
   },
   resultBlur: {
-    padding: 24,
+    padding: 0,
   },
   resultHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   resultTitle: {
     fontSize: 20,
@@ -371,27 +373,28 @@ const styles = StyleSheet.create({
     color: '#FFF',
     letterSpacing: -0.5,
   },
-  resetBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  resultBadge: {
+    backgroundColor: 'rgba(244,224,185,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(244,224,185,0.25)',
   },
-  resetBtnText: {
+  resultBadgeText: {
     color: '#F4E0B9',
     fontSize: 9,
     fontWeight: '900',
     letterSpacing: 1.5,
   },
+
   resultImageWrapper: {
     width: '100%',
     aspectRatio: 1,
     borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#0A0A0A',
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -406,21 +409,22 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
+    marginTop: 4,
   },
   resultPromptLabel: {
     fontSize: 9,
     color: '#F4E0B9',
     fontWeight: '900',
     letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: 10,
     opacity: 0.8,
   },
   resultPromptText: {
-    fontSize: 14,
+    fontSize: 15,
     color: 'rgba(255, 255, 255, 0.9)',
     fontWeight: '600',
     fontStyle: 'italic',
-    lineHeight: 22,
+    lineHeight: 24,
   },
   controlsContainer: {
     opacity: 1, // Optional: keeping it clean
