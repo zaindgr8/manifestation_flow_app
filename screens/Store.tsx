@@ -4,6 +4,8 @@ import { useManifest } from '../context/ManifestContext';
 import { BlurView } from 'expo-blur';
 import { Sparkles, Zap, ShieldCheck, Crown, ArrowLeft, Check, Flame } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 const { width } = Dimensions.get('window');
 
@@ -19,14 +21,26 @@ export const StoreScreen: React.FC = () => {
 
     const handlePurchasePro = async () => {
         setLoading('pro');
-        await purchasePro();
-        setLoading(null);
+        try {
+            await purchasePro();
+        } catch (e) {
+            const msg = handleApiError(e, 'purchasePro');
+            showErrorToast('Purchase failed', msg);
+        } finally {
+            setLoading(null);
+        }
     };
 
     const handlePurchaseCredits = async (pack: '10' | '50') => {
         setLoading(pack);
-        await purchaseCredits(pack);
-        setLoading(null);
+        try {
+            await purchaseCredits(pack);
+        } catch (e) {
+            const msg = handleApiError(e, 'purchaseCredits');
+            showErrorToast('Purchase failed', msg);
+        } finally {
+            setLoading(null);
+        }
     };
 
     return (

@@ -18,6 +18,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Gender } from '../types';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 const { width } = Dimensions.get('window');
 
@@ -55,6 +57,8 @@ export const Onboarding: React.FC = () => {
   const [dob, setDob] = useState(user.dob || '');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selfie, setSelfie] = useState<string | null>(user.selfieUrl || null);
+  const [isFinishing, setIsFinishing] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user.name && !name) setName(user.name);
@@ -62,68 +66,91 @@ export const Onboarding: React.FC = () => {
   }, [user]);
 
   const pickImage = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
-    });
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
+      });
 
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      if (!asset.base64 && asset.uri.startsWith('blob:')) {
-        alert('Image could not be processed. Please try again or use a different image.');
-        return;
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        if (!asset.base64 && asset.uri.startsWith('blob:')) {
+          showErrorToast('Image could not be processed', 'Please try again or use a different image.');
+          return;
+        }
+        const imageUri = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setSelfie(imageUri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      const imageUri = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
-      setSelfie(imageUri);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      const msg = handleApiError(e, 'pickImage');
+      showErrorToast('Failed to pick image', msg);
     }
   };
 
   const takePhoto = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
 
-    if (permissionResult.granted === false) {
-      alert("You've refused to allow this app to access your camera!");
-      return;
-    }
-
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
-    });
-
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      if (!asset.base64 && asset.uri.startsWith('blob:')) {
-        alert('Image could not be processed. Please try again or use a different image.');
+      if (permissionResult.granted === false) {
+        showErrorToast('Camera access denied', 'Please allow camera access in your device settings.');
         return;
       }
-      const imageUri = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
-      setSelfie(imageUri);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true, // Avoid blob: URLs in Expo Go / Replit tunnel
+      });
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        if (!asset.base64 && asset.uri.startsWith('blob:')) {
+          showErrorToast('Image could not be processed', 'Please try again or use a different image.');
+          return;
+        }
+        const imageUri = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setSelfie(imageUri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'takePhoto');
+      showErrorToast('Failed to take photo', msg);
     }
   };
 
-  const finishOnboarding = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    updateUser({
-      name,
-      gender: gender as Gender,
-      dob,
-      selfieUrl: selfie,
-      isOnboarded: true
-    });
+  const finishOnboarding = async () => {
+    if (!name.trim()) {
+      setNameError('Please enter your name.');
+      return;
+    }
+    if (isFinishing) return;
+    setIsFinishing(true);
+    try {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await updateUser({
+        name: name.trim(),
+        gender: gender as Gender,
+        dob,
+        selfieUrl: selfie,
+        isOnboarded: true
+      });
+    } catch (e) {
+      const msg = handleApiError(e, 'finishOnboarding');
+      showErrorToast('Failed to save profile', msg);
+    } finally {
+      setIsFinishing(false);
+    }
   };
 
   return (
@@ -165,8 +192,9 @@ export const Onboarding: React.FC = () => {
                   label="YOUR NAME"
                   placeholder="How would you like to be addressed?"
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(t: string) => { setName(t); setNameError(null); }}
                 />
+                {nameError && <Text style={styles.inlineError}>{nameError}</Text>}
 
                 <View style={styles.genderSection}>
                   <Text style={styles.inputLabel}>YOUR GENDER</Text>
@@ -290,7 +318,7 @@ export const Onboarding: React.FC = () => {
                 </Text>
 
                 <View style={styles.form}>
-                  <Button disabled={!selfie} onPress={finishOnboarding} style={styles.mainBtn}>
+                  <Button disabled={!selfie || isFinishing} loading={isFinishing} onPress={finishOnboarding} style={styles.mainBtn}>
                     Enter ManifestFlow
                   </Button>
 
@@ -317,6 +345,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#050505',
+  },
+  inlineError: {
+    color: '#fca5a5',
+    fontSize: 11,
+    marginTop: -8,
+    marginBottom: 8,
+    marginLeft: 4,
   },
   ambience1: {
     position: 'absolute',

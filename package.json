@@ -12,6 +12,8 @@
     "@google/genai": "^1.38.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "^8.4.4",
+    "base-64": "^1.0.0",
+    "burnt": "^0.13.0",
     "expo": "~54.0.0",
     "expo-auth-session": "~7.0.10",
     "expo-blur": "~15.0.8",
@@ -34,6 +36,7 @@
     "react-native-svg": "15.12.1"
   },
   "devDependencies": {
+    "@types/base-64": "^1.0.2",
     "@types/react": "^19.2.14",
     "tailwindcss": "3.3.2",
     "typescript": "~5.8.2"

@@ -15,6 +15,7 @@ import { LayoutDashboard, Calendar, Wand2, Loader2, User } from 'lucide-react-na
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { requestNotificationPermissions } from './services/notificationService';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 
@@ -34,7 +35,9 @@ const AppContent = () => {
         }
 
         // Request Push Notification Permissions
-        requestNotificationPermissions();
+        requestNotificationPermissions().catch((e) =>
+          console.warn('Notification permission request failed:', e)
+        );
     }, []);
 
   const { currentScreen, setScreen, user, authUser, authLoading, isGuestMode } = useManifest();
@@ -151,9 +154,11 @@ const AppContent = () => {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <ManifestProvider>
-        <AppContent />
-      </ManifestProvider>
+      <ErrorBoundary>
+        <ManifestProvider>
+          <AppContent />
+        </ManifestProvider>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

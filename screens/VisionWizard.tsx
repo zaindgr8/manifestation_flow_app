@@ -18,6 +18,8 @@ import { Input } from '../components/Input';
 import { Plus, Check, X, Sparkles } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 const { width } = Dimensions.get('window');
 
@@ -125,7 +127,7 @@ export const VisionWizard: React.FC = () => {
         else { setFlowIndex(prev => prev + 1); }
       } else {
         const data = formData[currentCategory];
-        if (!data?.title || !data?.targetDate) return;
+        if (!data?.title?.trim() || !data?.targetDate) return;
         setFlowIndex(prev => prev + 1);
       }
     }
@@ -156,7 +158,11 @@ export const VisionWizard: React.FC = () => {
         }
       }
       setScreen('TIMELINE');
-    } catch (e) { setIsSubmitting(false); }
+    } catch (e) {
+      const msg = handleApiError(e, 'handleSubmitAll');
+      showErrorToast('Failed to save goals', msg);
+      setIsSubmitting(false);
+    }
   };
 
   return (

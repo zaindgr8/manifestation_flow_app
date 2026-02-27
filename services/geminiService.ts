@@ -1,8 +1,25 @@
 
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import { UserProfile, VisionGoal } from "../types";
+import { encode as btoa } from 'base-64';
 
-const ai = new GoogleGenAI({ apiKey: process.env.EXPO_PUBLIC_API_KEY as string });
+const API_KEY = process.env.EXPO_PUBLIC_API_KEY;
+if (!API_KEY) {
+  console.warn('[geminiService] EXPO_PUBLIC_API_KEY is not set. AI features will be disabled.');
+}
+const ai = new GoogleGenAI({ apiKey: API_KEY ?? '' });
+
+const API_TIMEOUT_MS = 15_000;
+const IMAGE_GEN_TIMEOUT_MS = 90_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label?: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(label ? `${label} timed out` : 'Request timed out')), ms)
+    ),
+  ]);
+}
 
 // Relaxed safety settings to prevent false positives for benign requests.
 // We use BLOCK_NONE where possible or BLOCK_ONLY_HIGH to maximize creative freedom.
@@ -97,13 +114,17 @@ const refineImagePrompt = async (userPrompt: string, categories: string[]): Prom
       7. OUTPUT: Return ONLY the refined description. No explanation.
     `;
 
-    const result = await ai.models.generateContent({
+    const result = await withTimeout(
+      ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: {
             safetySettings: RELAXED_SAFETY_SETTINGS
         }
-    });
+      }),
+      API_TIMEOUT_MS,
+      'Prompt refinement'
+    );
 
     const refined = result.text?.trim();
     if (!refined || refined.length < 5) throw new Error("Empty AI result");
@@ -125,14 +146,18 @@ const executeImageGeneration = async (
     isPersonalized: boolean = false
 ): Promise<string | null> => {
     try {
-        const response = await ai.models.generateContent({
+        const response = await withTimeout(
+          ai.models.generateContent({
             model: 'gemini-2.5-flash-image',
             contents,
             config: {
                 responseModalities: ['IMAGE', 'TEXT'],
                 safetySettings: RELAXED_SAFETY_SETTINGS,
             },
-        });
+          }),
+          IMAGE_GEN_TIMEOUT_MS,
+          'Image generation'
+        );
 
         if (response.candidates?.[0]?.content?.parts) {
             for (const part of response.candidates[0].content.parts) {
@@ -178,7 +203,20 @@ const urlToBase64 = async (url: string): Promise<string> => {
       );
     }
 
-    const response = await fetch(url);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > 10 * 1024 * 1024) {
+      throw new Error('Image too large (>10 MB)');
+    }
+
     const arrayBuffer = await response.arrayBuffer();
     const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
@@ -239,10 +277,14 @@ export const generateDailyAffirmation = async (
       Objective: Write it in plain English so it's easy to understand at a glance.
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-    });
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      }),
+      API_TIMEOUT_MS,
+      'Daily affirmation'
+    );
 
     return response.text?.trim() || "I am currently living my highest potential.";
   } catch (error) {
@@ -529,13 +571,17 @@ export const generateLifestyleSuggestions = async (user: UserProfile, goals: Vis
         `;
 
 
-        const response = await ai.models.generateContent({
+        const response = await withTimeout(
+          ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
             config: {
                 temperature: 1.2, // High creativity/randomness
             }
-        });
+          }),
+          API_TIMEOUT_MS,
+          'Lifestyle suggestions'
+        );
 
         const text = response.text?.trim() || "";
         return text.split('|').map(s => s.trim()).filter(s => s.length > 0).slice(0, 4);

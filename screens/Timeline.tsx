@@ -37,6 +37,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { VisionGoal } from '../types';
+import { showErrorToast, showSuccessToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 const { width, height } = Dimensions.get('window');
 
@@ -129,21 +131,31 @@ export const Timeline: React.FC = () => {
         setEditingGoal(null);
         setEditingRituals([]);
     } catch (e) {
-        console.error("Update failed", e);
-        alert("Failed to update vision. Please try again.");
+        const msg = handleApiError(e, 'updateGoal');
+        showErrorToast('Failed to update vision', msg);
     }
   };
 
   const handleDeleteGoal = (goalId: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const doDelete = () => {
+      deleteGoal(goalId);
+      setOptionsMenuId(null);
+    };
     if (Platform.OS === 'web') {
         if (window.confirm("Are you sure you want to delete this vision?")) {
-            deleteGoal(goalId);
+            doDelete();
         }
     } else {
-        deleteGoal(goalId);
+        Alert.alert(
+          'Delete Vision',
+          'Are you sure you want to delete this vision? This cannot be undone.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: doDelete },
+          ]
+        );
     }
-    setOptionsMenuId(null);
   };
 
   const handlePersonalize = async (useExisting: boolean) => {
@@ -153,19 +165,25 @@ export const Timeline: React.FC = () => {
     let imageUrl = user.selfieUrl || authUser?.photoURL;
 
     if (!useExisting) {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-        base64: true,
-      });
+      try {
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+          base64: true,
+        });
 
-      if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      imageUrl = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
+        if (result.canceled || !result.assets[0]) return;
+        const asset = result.assets[0];
+        imageUrl = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+      } catch (e) {
+        const msg = handleApiError(e, 'pickImage');
+        showErrorToast('Failed to pick image', msg);
+        return;
+      }
     }
 
     if (!imageUrl) return;
@@ -195,8 +213,8 @@ export const Timeline: React.FC = () => {
           ]
         );
       } else {
-        console.error('Visualize Yourself error:', e);
-        alert(e?.message || 'Image generation failed. Please try again.');
+        const msg = handleApiError(e, 'personalizeGoal');
+        showErrorToast('Image generation failed', msg);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } finally {

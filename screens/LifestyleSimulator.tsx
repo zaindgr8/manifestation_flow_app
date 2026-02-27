@@ -29,6 +29,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 const { width } = Dimensions.get('window');
 
@@ -79,26 +81,31 @@ export const LifestyleSimulator: React.FC = () => {
   };
 
   const pickImage = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-      base64: true, // Avoid blob: URLs in tunnel/web context
-    });
-    if (!result.canceled) {
-      const asset = result.assets[0];
-      if (!asset.base64 && asset.uri.startsWith('blob:')) {
-        alert('Image could not be processed. Please try again or use a different image.');
-        return;
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true, // Avoid blob: URLs in tunnel/web context
+      });
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        if (!asset.base64 && asset.uri.startsWith('blob:')) {
+          showErrorToast('Image could not be processed', 'Please try again or use a different image.');
+          return;
+        }
+        // Prefer base64 to avoid blob: URL issues in Expo Go / Replit tunnel
+        const imageUri = asset.base64
+          ? `data:image/jpeg;base64,${asset.base64}`
+          : asset.uri;
+        setCurrentImage(imageUri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      // Prefer base64 to avoid blob: URL issues in Expo Go / Replit tunnel
-      const imageUri = asset.base64
-        ? `data:image/jpeg;base64,${asset.base64}`
-        : asset.uri;
-      setCurrentImage(imageUri);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      const msg = handleApiError(e, 'pickImage');
+      showErrorToast('Failed to pick image', msg);
     }
   };
 
@@ -126,7 +133,8 @@ export const LifestyleSimulator: React.FC = () => {
           ]
         );
       } else {
-        console.error(e);
+        const msg = handleApiError(e, 'simulateLifestyle');
+        showErrorToast('Simulation failed', msg);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } finally {

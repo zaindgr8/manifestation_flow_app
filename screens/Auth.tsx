@@ -25,6 +25,8 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -41,35 +43,66 @@ export const AuthScreen: React.FC = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null);
+    const [passwordError, setPasswordError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const { enableGuestMode } = useManifest();
 
     const [request, response, promptAsync] = Google.useAuthRequest({
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '50846238672-1skmjgl5lp2r9u10i9vnqumvdpcd6mc2.apps.googleusercontent.com',
-        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '50846238672-1skmjgl5lp2r9u10i9vnqumvdpcd6mc2.apps.googleusercontent.com',
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '50846238672-1skmjgl5lp2r9u10i9vnqumvdpcd6mc2.apps.googleusercontent.com',
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
     });
 
     useEffect(() => {
+        let cancelled = false;
         if (response?.type === 'success') {
             const { id_token } = response.params;
             const credential = GoogleAuthProvider.credential(id_token);
             setLoading(true);
             signInWithCredential(auth, credential)
                 .then(() => {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    if (!cancelled) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 })
                 .catch((err) => {
                     console.error("Google Auth Error", err);
-                    setError("Google Sign-In failed.");
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    if (!cancelled) {
+                      setError("Google Sign-In failed.");
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                    }
                 })
-                .finally(() => setLoading(false));
+                .finally(() => { if (!cancelled) setLoading(false); });
         }
+        return () => { cancelled = true; };
     }, [response]);
 
+    const validateForm = (): boolean => {
+        let valid = true;
+        setEmailError(null);
+        setPasswordError(null);
+
+        if (!email.trim()) {
+          setEmailError('Email is required.');
+          valid = false;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+          setEmailError('Please enter a valid email address.');
+          valid = false;
+        }
+
+        if (!password) {
+          setPasswordError('Password is required.');
+          valid = false;
+        } else if (!isLogin && password.length < 6) {
+          setPasswordError('Password must be at least 6 characters.');
+          valid = false;
+        }
+
+        return valid;
+    };
+
     const handleEmailAuth = async () => {
-        if (!email || !password) return;
+        if (loading) return;
+        if (!validateForm()) return;
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
         if (!auth) {
@@ -154,17 +187,23 @@ export const AuthScreen: React.FC = () => {
                                 label="Email Address"
                                 placeholder="Enter Your Email"
                                 value={email}
-                                onChangeText={setEmail}
+                                onChangeText={(t) => { setEmail(t); setEmailError(null); }}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
+                            {emailError && (
+                                <Text style={styles.inlineError}>{emailError}</Text>
+                            )}
                             <Input
                                 label="PASSWORD"
                                 placeholder="••••••••"
                                 value={password}
-                                onChangeText={setPassword}
+                                onChangeText={(t) => { setPassword(t); setPasswordError(null); }}
                                 secureTextEntry
                             />
+                            {passwordError && (
+                                <Text style={styles.inlineError}>{passwordError}</Text>
+                            )}
 
                             {error && (
                                 <View style={styles.errorContainer}>
@@ -392,6 +431,13 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginTop: 32,
         lineHeight: 18,
+    },
+    inlineError: {
+        color: '#fca5a5',
+        fontSize: 11,
+        marginTop: -14,
+        marginBottom: 8,
+        marginLeft: 4,
     },
 });
 

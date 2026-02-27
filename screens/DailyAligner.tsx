@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Image, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Image, Modal, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, Keyboard, Alert } from 'react-native';
 import { useManifest } from '../context/ManifestContext';
 import { Check, RefreshCw, Settings, Bell, Sun, Moon, X, Flame, CheckCircle2, Plus, Edit2, Trash2, Save, Heart, Sparkles, Maximize2, LayoutDashboard } from 'lucide-react-native';
 import { Button } from '../components/Button';
@@ -7,6 +7,8 @@ import { Input } from '../components/Input';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 export const DailyAligner: React.FC = () => {
   const { user, rituals, goals, affirmation, toggleRitual, refreshAffirmation, updateUser, acknowledgeAffirmation, addRitual, deleteRitual, gratitudeEntries, addGratitude, loadingAffirmation } = useManifest();
@@ -103,15 +105,24 @@ export const DailyAligner: React.FC = () => {
   }, [isAllComplete]);
 
   const handleRefreshAffirmation = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await refreshAffirmation();
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      await refreshAffirmation();
+    } catch (e) {
+      const msg = handleApiError(e, 'refreshAffirmation');
+      showErrorToast('Failed to refresh affirmation', msg);
+    }
   };
 
   const saveSettings = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    updateUser({ reminderTimes: { morning: morningTime, evening: eveningTime }, hasSetSchedule: true });
+    updateUser({ reminderTimes: { morning: morningTime, evening: eveningTime }, hasSetSchedule: true })
+      .catch((e: unknown) => {
+        const msg = handleApiError(e, 'saveSettings');
+        showErrorToast('Failed to save settings', msg);
+      });
     setShowSettings(false);
-    refreshAffirmation();
+    refreshAffirmation().catch(() => {});
   };
 
   const handleAddRitual = () => {
@@ -252,7 +263,10 @@ export const DailyAligner: React.FC = () => {
                 }}
                 onLongPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                  deleteRitual(ritual.id);
+                  Alert.alert('Delete Ritual', 'Are you sure you want to remove this ritual?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => deleteRitual(ritual.id) },
+                  ]);
                 }}
                 className={`flex-row items-center gap-5 px-5 py-4 rounded-[20px] border ${ritual.isCompleted ? 'bg-gold/10 border-gold/30 opacity-60' : 'bg-surface/40 border-white/10 shadow-sm'}`}
               >
@@ -270,7 +284,10 @@ export const DailyAligner: React.FC = () => {
                 <TouchableOpacity
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
-                    deleteRitual(ritual.id);
+                    Alert.alert('Delete Ritual', 'Are you sure you want to remove this ritual?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete', style: 'destructive', onPress: () => deleteRitual(ritual.id) },
+                    ]);
                   }}
                   className="opacity-20"
                 >

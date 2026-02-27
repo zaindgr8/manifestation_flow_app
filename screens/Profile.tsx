@@ -10,6 +10,8 @@ import RNDateTimePicker from '@react-native-community/datetimepicker';
 import { auth } from '../services/firebase';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
+import { showSuccessToast, showErrorToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
 
 export const ProfileScreen: React.FC = () => {
     const { user, updateUser, setScreen, logout, isGuestMode, purchasePro, purchaseCredits } = useManifest();
@@ -29,20 +31,25 @@ export const ProfileScreen: React.FC = () => {
     }, [user]);
 
     const handleSave = async () => {
+        if (!name.trim()) {
+            showErrorToast('Name is required');
+            return;
+        }
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setIsSaving(true);
         try {
             await updateUser({
-                name,
+                name: name.trim(),
                 gender: gender as Gender,
                 dob,
                 selfieUrl: selfie
             });
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert('Success', 'Your quantum identity has been updated.');
+            showSuccessToast('Profile updated');
         } catch (e) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            Alert.alert('Error', 'Failed to update profile.');
+            const msg = handleApiError(e, 'updateProfile');
+            showErrorToast('Failed to update profile', msg);
         } finally {
             setIsSaving(false);
         }
@@ -73,30 +80,45 @@ export const ProfileScreen: React.FC = () => {
     };
 
     const pickImage = async () => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-        });
+        try {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                aspect: [1, 1],
+                quality: 0.8,
+                base64: true,
+            });
 
-        if (!result.canceled) {
-            const uri = result.assets[0].uri;
-            // Show the image immediately in the UI (optimistic)
-            setSelfie(uri);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (!result.canceled) {
+                const asset = result.assets[0];
+                if (!asset.base64 && asset.uri.startsWith('blob:')) {
+                    showErrorToast('Image could not be processed', 'Please try again or use a different image.');
+                    return;
+                }
+                // Prefer base64 data URI — avoids file system reads that break on Expo Go SDK 54
+                const imageUri = asset.base64
+                    ? `data:image/jpeg;base64,${asset.base64}`
+                    : asset.uri;
 
-            // Auto-save: upload to Firebase Storage right away so image persists
-            // even if the user navigates away without tapping "Synchronize Identity".
-            setIsUploadingImage(true);
-            try {
-                await updateUser({ selfieUrl: uri });
-            } catch (e) {
-                console.error('Auto-save of profile image failed:', e);
-            } finally {
-                setIsUploadingImage(false);
+                // Show the image immediately in the UI (optimistic)
+                setSelfie(imageUri);
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                // Auto-save: upload to Firebase Storage right away so image persists
+                // even if the user navigates away without tapping "Synchronize Identity".
+                setIsUploadingImage(true);
+                try {
+                    await updateUser({ selfieUrl: imageUri });
+                } catch (e) {
+                    console.error('Auto-save of profile image failed:', e);
+                } finally {
+                    setIsUploadingImage(false);
+                }
             }
+        } catch (e) {
+            const msg = handleApiError(e, 'pickImage');
+            showErrorToast('Failed to pick image', msg);
         }
     };
 

@@ -17,6 +17,13 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
+const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'appId'] as const;
+for (const key of requiredKeys) {
+  if (!firebaseConfig[key]) {
+    console.error(`[Firebase] Missing required config: EXPO_PUBLIC_FIREBASE_${key.replace(/([A-Z])/g, '_$1').toUpperCase()}`);
+  }
+}
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 

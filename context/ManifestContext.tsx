@@ -5,8 +5,11 @@ import { generateDailyAffirmation, generateVisionBoardImage, generatePersonalize
 import { auth, db, storage } from '../services/firebase';
 import { scheduleAffirmationReminders } from '../services/notificationService';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { ref, uploadString, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
+import { showSuccessToast, showErrorToast, showInfoToast } from '../utils/toast';
+import { handleApiError } from '../utils/apiError';
+import * as FileSystem from 'expo-file-system/legacy';
 import { 
   collection, 
   doc, 
@@ -37,7 +40,7 @@ interface ManifestContextType {
   isGuestMode: boolean;
   enableGuestMode: () => void;
 
-  updateUser: (updates: Partial<UserProfile>) => void;
+  updateUser: (updates: Partial<UserProfile>) => Promise<void>;
   addGoalAndRitual: (goal: Omit<VisionGoal, 'id' | 'createdAt'>, ritualTitles: string[]) => void;
   addRitual: (title: string, goalId?: string) => void;
   deleteRitual: (id: string) => void;
@@ -145,7 +148,9 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
                 selfieUrl: authUser.photoURL || null,
                 // We keep isOnboarded false so they can confirm their details/gender in the Wizard
             };
-            setDoc(userRef, initialProfile, { merge: true });
+            setDoc(userRef, initialProfile, { merge: true }).catch((e) =>
+              console.error('[ManifestContext] Failed to create initial profile:', e)
+            );
         }
     });
 
@@ -315,7 +320,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
                     console.error("Profile image upload failed:", uploadError);
                     // CRITICAL: Prevent saving local URI/Base64 to Firestore
                     delete finalUpdates.selfieUrl;
-                    alert("Profile image upload failed. We saved your other info, but the image couldn't be stored.");
+                    showErrorToast("Image upload failed", "Your other info was saved, but the image couldn't be stored.");
                 }
             } else if (selfieUri && (selfieUri.startsWith('data:image') || selfieUri.startsWith('file://'))) {
                 // Secondary guard for edge cases
@@ -352,7 +357,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     // 1. Check Goal Limits
     const isPro = user.subscription?.plan === 'PRO';
     if (!isPro && goals.length >= 3) {
-        alert("You have reached the maximum of 3 goals on the Free plan. Upgrade to Manifestor Pro for unlimited goals.");
+        showInfoToast("Goal limit reached", "Upgrade to Manifestor Pro for unlimited goals.");
         return;
     }
 
@@ -360,49 +365,52 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     // For Firestore, we let SDK generate ID or use a placeholder
     const timestamp = Date.now();
     
-    if (authUser && db) {
-        // 1. Add Goal
-        const goalsRef = collection(db, `users/${authUser.uid}/goals`);
-        const goalDoc = await addDoc(goalsRef, {
-            ...goalData,
-            createdAt: timestamp,
-            isLoadingImage: true
-        });
+    try {
+      if (authUser && db) {
+          // 1. Add Goal
+          const goalsRef = collection(db, `users/${authUser.uid}/goals`);
+          const goalDoc = await addDoc(goalsRef, {
+              ...goalData,
+              createdAt: timestamp,
+              isLoadingImage: true
+          });
 
-        // 2. Add Rituals
-        const ritualsRef = collection(db, `users/${authUser.uid}/rituals`);
-        const batch = [];
-        for (const title of ritualTitles) {
-             await addDoc(ritualsRef, {
-                goalId: goalDoc.id,
-                title,
-                isCompleted: false,
-                lastCompletedDate: null,
-                createdAt: timestamp
-             });
-        }
-        
-        // Trigger auto-generation on creation (Background Task)
-        triggerInitialGoalImage(goalDoc.id, goalData.title, goalData.categories);
+          // 2. Add Rituals
+          const ritualsRef = collection(db, `users/${authUser.uid}/rituals`);
+          for (const title of ritualTitles) {
+               await addDoc(ritualsRef, {
+                  goalId: goalDoc.id,
+                  title,
+                  isCompleted: false,
+                  lastCompletedDate: null,
+                  createdAt: timestamp
+               });
+          }
+          
+          // Trigger auto-generation on creation (Background Task)
+          triggerInitialGoalImage(goalDoc.id, goalData.title, goalData.categories);
 
-    } else {
-        // Local Mode
-        const newGoalId = timestamp.toString();
-        const newGoal: VisionGoal = { ...goalData, id: newGoalId, createdAt: timestamp, isLoadingImage: true };
-        const newRituals: DailyRitual[] = ritualTitles.map((title, i) => ({
-            id: `ritual-${timestamp}-${i}`,
-            goalId: newGoalId,
-            title,
-            isCompleted: false,
-            lastCompletedDate: null,
-            createdAt: timestamp
-        }));
-        setGoals(prev => [...prev, newGoal].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()));
-        setRituals(prev => [...prev, ...newRituals]);
-        
-        // Trigger auto-generation on creation (Background Task)
-        triggerInitialGoalImage(newGoalId, goalData.title, goalData.categories);
-
+      } else {
+          // Local Mode
+          const newGoalId = timestamp.toString();
+          const newGoal: VisionGoal = { ...goalData, id: newGoalId, createdAt: timestamp, isLoadingImage: true };
+          const newRituals: DailyRitual[] = ritualTitles.map((title, i) => ({
+              id: `ritual-${timestamp}-${i}`,
+              goalId: newGoalId,
+              title,
+              isCompleted: false,
+              lastCompletedDate: null,
+              createdAt: timestamp
+          }));
+          setGoals(prev => [...prev, newGoal].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()));
+          setRituals(prev => [...prev, ...newRituals]);
+          
+          // Trigger auto-generation on creation (Background Task)
+          triggerInitialGoalImage(newGoalId, goalData.title, goalData.categories);
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'addGoalAndRitual');
+      showErrorToast('Failed to save goal', msg);
     }
   };
 
@@ -461,61 +469,91 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   };
 
   const updateGoal = async (id: string, updates: Partial<VisionGoal>) => {
-    if (authUser && db) {
-        await updateDoc(doc(db, `users/${authUser.uid}/goals`, id), updates);
-    } else {
-        setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    try {
+      if (authUser && db) {
+          await updateDoc(doc(db, `users/${authUser.uid}/goals`, id), updates);
+      } else {
+          setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'updateGoal');
+      showErrorToast('Failed to update goal', msg);
     }
   };
 
   const deleteGoal = async (id: string) => {
-    if (authUser && db) {
-        await deleteDoc(doc(db, `users/${authUser.uid}/goals`, id));
-        // Also delete associated rituals
-        const associatedRituals = rituals.filter(r => r.goalId === id);
-        for (const r of associatedRituals) {
-            await deleteDoc(doc(db, `users/${authUser.uid}/rituals`, r.id));
-        }
-    } else {
-        setGoals(prev => prev.filter(g => g.id !== id));
-        setRituals(prev => prev.filter(r => r.goalId !== id));
+    try {
+      if (authUser && db) {
+          await deleteDoc(doc(db, `users/${authUser.uid}/goals`, id));
+          // Also delete associated rituals
+          const associatedRituals = rituals.filter(r => r.goalId === id);
+          for (const r of associatedRituals) {
+              await deleteDoc(doc(db, `users/${authUser.uid}/rituals`, r.id));
+          }
+      } else {
+          setGoals(prev => prev.filter(g => g.id !== id));
+          setRituals(prev => prev.filter(r => r.goalId !== id));
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'deleteGoal');
+      showErrorToast('Failed to delete goal', msg);
     }
   };
 
    const addRitual = async (title: string, goalId?: string) => {
-      const targetGoalId = goalId || (goals.length > 0 ? goals[0].id : 'general');
-      if (authUser && db) {
-          await addDoc(collection(db, `users/${authUser.uid}/rituals`), {
-              goalId: targetGoalId, title, isCompleted: false, lastCompletedDate: null, createdAt: Date.now()
-          });
-      } else {
-          setRituals(prev => [{ id: Date.now().toString(), goalId: targetGoalId, title, isCompleted: false, lastCompletedDate: null, createdAt: Date.now() }, ...prev]);
-      }
+     try {
+       const targetGoalId = goalId || (goals.length > 0 ? goals[0].id : 'general');
+       if (authUser && db) {
+           await addDoc(collection(db, `users/${authUser.uid}/rituals`), {
+               goalId: targetGoalId, title, isCompleted: false, lastCompletedDate: null, createdAt: Date.now()
+           });
+       } else {
+           setRituals(prev => [{ id: Date.now().toString(), goalId: targetGoalId, title, isCompleted: false, lastCompletedDate: null, createdAt: Date.now() }, ...prev]);
+       }
+     } catch (e) {
+       const msg = handleApiError(e, 'addRitual');
+       showErrorToast('Failed to add target', msg);
+     }
    };
 
   const deleteRitual = async (id: string) => {
-    if (authUser && db) {
-        await deleteDoc(doc(db, `users/${authUser.uid}/rituals`, id));
-    } else {
-        setRituals(prev => prev.filter(r => r.id !== id));
+    try {
+      if (authUser && db) {
+          await deleteDoc(doc(db, `users/${authUser.uid}/rituals`, id));
+      } else {
+          setRituals(prev => prev.filter(r => r.id !== id));
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'deleteRitual');
+      showErrorToast('Failed to delete target', msg);
     }
   };
 
   const updateRitualTitle = async (id: string, title: string) => {
-    if (authUser && db) {
-        await updateDoc(doc(db, `users/${authUser.uid}/rituals`, id), { title });
-    } else {
-        setRituals(prev => prev.map(r => r.id === id ? { ...r, title } : r));
+    try {
+      if (authUser && db) {
+          await updateDoc(doc(db, `users/${authUser.uid}/rituals`, id), { title });
+      } else {
+          setRituals(prev => prev.map(r => r.id === id ? { ...r, title } : r));
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'updateRitualTitle');
+      showErrorToast('Failed to update target', msg);
     }
   };
 
   const addGratitude = async (text: string) => {
-    if (authUser && db) {
-        await addDoc(collection(db, `users/${authUser.uid}/gratitude`), {
-            text, createdAt: Date.now()
-        });
-    } else {
-        setGratitudeEntries(prev => [{ id: Date.now().toString(), text, createdAt: Date.now() }, ...prev]);
+    try {
+      if (authUser && db) {
+          await addDoc(collection(db, `users/${authUser.uid}/gratitude`), {
+              text, createdAt: Date.now()
+          });
+      } else {
+          setGratitudeEntries(prev => [{ id: Date.now().toString(), text, createdAt: Date.now() }, ...prev]);
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'addGratitude');
+      showErrorToast('Failed to save gratitude', msg);
     }
   };
 
@@ -529,10 +567,15 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
         lastCompletedDate: !ritual.isCompleted ? new Date().toISOString() : ritual.lastCompletedDate
     };
 
-    if (authUser && db) {
-        await updateDoc(doc(db, `users/${authUser.uid}/rituals`, id), updates);
-    } else {
-        setRituals(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    try {
+      if (authUser && db) {
+          await updateDoc(doc(db, `users/${authUser.uid}/rituals`, id), updates);
+      } else {
+          setRituals(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'toggleRitual');
+      showErrorToast('Failed to update target', msg);
     }
   };
 
@@ -541,41 +584,55 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
     goalUpdates: Partial<VisionGoal>, 
     ritualsToUpdate: {id?: string, title: string, deleted?: boolean}[]
   ) => {
-    // 1. Update Goal
-    await updateGoal(goalId, goalUpdates);
+    try {
+      // 1. Update Goal
+      await updateGoal(goalId, goalUpdates);
 
-    // 2. Process Rituals
-    for (const r of ritualsToUpdate) {
-        if (r.deleted && r.id) {
-            await deleteRitual(r.id);
-        } else if (r.id) {
-            // Update existing
-            await updateRitualTitle(r.id, r.title);
-        } else if (r.title.trim()) {
-            // Add new
-            await addRitual(r.title, goalId);
-        }
+      // 2. Process Rituals
+      for (const r of ritualsToUpdate) {
+          if (r.deleted && r.id) {
+              await deleteRitual(r.id);
+          } else if (r.id) {
+              // Update existing
+              await updateRitualTitle(r.id, r.title);
+          } else if (r.title.trim()) {
+              // Add new
+              await addRitual(r.title, goalId);
+          }
+      }
+    } catch (e) {
+      const msg = handleApiError(e, 'updateGoalWithRituals');
+      showErrorToast('Failed to update vision', msg);
+      throw e;
     }
   };
 
-    const uploadImageToStorage = async (base64DataUri: string, storagePath: string): Promise<string> => {
+    const uploadImageToStorage = async (imageUri: string, storagePath: string): Promise<string> => {
         const storageRef = ref(storage, storagePath);
-        
+
         try {
-            // Priority 1: uploadString for base64 (Most reliable in Expo Go)
-            if (base64DataUri.startsWith('data:image')) {
-                // Ensure correct format for data_url
-                const uploadTask = await uploadString(storageRef, base64DataUri, 'data_url');
-                console.log(`Successfully uploaded via uploadString: ${uploadTask.metadata.fullPath}`);
+            let base64DataUri: string;
+
+            if (imageUri.startsWith('data:image')) {
+                // Already a base64 data URI — use directly
+                base64DataUri = imageUri;
+            } else if (imageUri.startsWith('file://') || imageUri.startsWith('/')) {
+                // file:// URI — read as base64 using expo-file-system/legacy
+                // This is only a fallback; all image pickers should request base64: true
+                console.warn('uploadImageToStorage: falling back to FileSystem for file URI');
+                const mimeType = imageUri.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+                const base64 = await FileSystem.readAsStringAsync(imageUri, {
+                    encoding: 'base64' as any,
+                });
+                base64DataUri = `data:${mimeType};base64,${base64}`;
             } else {
-                // Priority 2: Blob for file:// URIs
-                const response = await fetch(base64DataUri);
-                const blob = await response.blob();
-                await uploadBytes(storageRef, blob);
-                console.log(`Successfully uploaded via Blob: ${storagePath}`);
+                // Unsupported URI format (blob:, http:, etc.) — cannot upload directly
+                throw new Error(`Unsupported image URI format. Expected base64 data URI or file path, got: ${imageUri.substring(0, 30)}...`);
             }
+
+            await uploadString(storageRef, base64DataUri, 'data_url');
         } catch (e) {
-            console.error("Storage upload error:", e);
+            console.error('Storage upload error:', e);
             throw e;
         }
 
@@ -586,7 +643,7 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       // 1. Check & Deduct Credits (1)
       const success = await deductCredits(1);
       if (!success) {
-          alert("You have run out of Cosmic Credits. Top up to generate more imagery.");
+          showInfoToast("Insufficient credits", "Top up to generate more imagery.");
           return;
       }
       
@@ -660,12 +717,16 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   };
 
   const addToLifestyleHistory = async (shift: Omit<LifestyleShift, 'id' | 'createdAt'>) => {
-      if (authUser && db) {
-          await addDoc(collection(db, `users/${authUser.uid}/lifestyle`), {
-              ...shift, createdAt: Date.now()
-          });
-      } else {
-          setLifestyleHistory(prev => [{ ...shift, id: Date.now().toString(), createdAt: Date.now() }, ...prev]);
+      try {
+        if (authUser && db) {
+            await addDoc(collection(db, `users/${authUser.uid}/lifestyle`), {
+                ...shift, createdAt: Date.now()
+            });
+        } else {
+            setLifestyleHistory(prev => [{ ...shift, id: Date.now().toString(), createdAt: Date.now() }, ...prev]);
+        }
+      } catch (e) {
+        console.error('[ManifestContext] Failed to save lifestyle history:', e);
       }
   };
 
@@ -683,6 +744,9 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
               lastGenerated: new Date().toDateString(),
               isAcknowledged: false
           });
+      } catch (e) {
+          const msg = handleApiError(e, 'refreshAffirmation');
+          showErrorToast('Failed to refresh affirmation', msg);
       } finally {
           setLoadingAffirmation(false);
       }
@@ -691,9 +755,13 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
   const acknowledgeAffirmation = async () => {
       setAffirmation(prev => ({ ...prev, isAcknowledged: true }));
       const now = new Date();
-      updateUser({ lastAffirmationAck: now.toISOString() });
-      // Trigger new one immediately
-      await refreshAffirmation();
+      try {
+        await updateUser({ lastAffirmationAck: now.toISOString() });
+        // Trigger new one immediately
+        await refreshAffirmation();
+      } catch (e) {
+        console.error('[ManifestContext] acknowledgeAffirmation error:', e);
+      }
   };
 
   // --- REVENUECAT ACTIONS ---
@@ -706,15 +774,16 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
               const { customerInfo } = await Purchases.purchasePackage(pack);
               handleCustomerInfoUpdate(customerInfo);
           } else {
-              alert("No offerings available.");
+              showInfoToast("No offerings available");
           }
       } catch (e: any) {
           if (e.code === 'PURCHASES_ARE_NOT_CONFIGURED') {
-              alert("Payments disabled in Expo Go. Use a Development Build to test.");
+              showInfoToast("Payments unavailable", "Use a Development Build to test purchases.");
               return;
           }
           if (!e.userCancelled) {
-              alert("Purchase failed: " + e.message);
+              showErrorToast("Purchase failed", "Please try again later.");
+              console.error('[ManifestContext] purchasePro error:', e);
           }
       }
   };
@@ -726,55 +795,68 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
            const creditPackage = offerings.all['credits']?.availablePackages.find(p => p.identifier.includes(amount));
            
            if (!creditPackage) {
-                // FALLBACK MOCK for Expo Go / No Config
-                updateUser({
-                    credits: {
-                        ...user.credits!,
-                        balance: (user.credits?.balance || 0) + parseInt(amount),
-                        lastRefill: new Date().toISOString()
-                    }
-                });
-                alert(`(Mock) Added ${amount} credits!`);
+                if (__DEV__) {
+                  // Mock fallback for development only
+                  updateUser({
+                      credits: {
+                          balance: (user.credits?.balance ?? 0) + parseInt(amount),
+                          lifetimeUsed: user.credits?.lifetimeUsed ?? 0,
+                          lifetimePurchased: (user.credits?.lifetimePurchased ?? 0) + parseInt(amount),
+                          lastRefill: new Date().toISOString()
+                      }
+                  });
+                  showSuccessToast(`(Dev) Added ${amount} credits`);
+                } else {
+                  showInfoToast("Credit packs unavailable", "Please try again later.");
+                }
                 return;
            }
 
            await Purchases.purchasePackage(creditPackage);
            updateUser({
                credits: {
-                   ...user.credits!,
-                   balance: (user.credits?.balance || 0) + parseInt(amount),
+                   balance: (user.credits?.balance ?? 0) + parseInt(amount),
+                   lifetimeUsed: user.credits?.lifetimeUsed ?? 0,
+                   lifetimePurchased: (user.credits?.lifetimePurchased ?? 0) + parseInt(amount),
                    lastRefill: new Date().toISOString()
                }
            });
            
       } catch (e: any) {
           if (e.code === 'PURCHASES_ARE_NOT_CONFIGURED') {
-               // Fallback for Expo Go
-                updateUser({
-                    credits: {
-                        ...user.credits!,
-                        balance: (user.credits?.balance || 0) + parseInt(amount),
-                        lastRefill: new Date().toISOString()
-                    }
-                });
-                alert(`(Mock/Expo Go) Added ${amount} credits!`);
+               if (__DEV__) {
+                 // Fallback for development
+                 updateUser({
+                     credits: {
+                         balance: (user.credits?.balance ?? 0) + parseInt(amount),
+                         lifetimeUsed: user.credits?.lifetimeUsed ?? 0,
+                         lifetimePurchased: (user.credits?.lifetimePurchased ?? 0) + parseInt(amount),
+                         lastRefill: new Date().toISOString()
+                     }
+                 });
+                 showSuccessToast(`(Dev) Added ${amount} credits`);
+               } else {
+                 showInfoToast("Payments unavailable");
+               }
               return;
           }
           if (!e.userCancelled) {
-               alert("Credit purchase failed.");
+               showErrorToast("Credit purchase failed", "Please try again later.");
+               console.error('[ManifestContext] purchaseCredits error:', e);
           }
       }
   };
 
    const deductCredits = async (amount: number): Promise<boolean> => {
-       const currentBalance = user.credits?.balance || 0;
+       const currentBalance = user.credits?.balance ?? 0;
        if (currentBalance < amount) return false;
 
        updateUser({
            credits: {
-               ...user.credits!,
                balance: currentBalance - amount,
-               lifetimeUsed: (user.credits?.lifetimeUsed || 0) + amount
+               lifetimeUsed: (user.credits?.lifetimeUsed ?? 0) + amount,
+               lifetimePurchased: user.credits?.lifetimePurchased ?? 0,
+               lastRefill: user.credits?.lastRefill ?? null
            }
        });
        return true;
@@ -784,18 +866,23 @@ export const ManifestProvider = ({ children }: PropsWithChildren<{}>) => {
       try {
           const info = await Purchases.restorePurchases();
           handleCustomerInfoUpdate(info);
-          alert("Purchases restored successfully.");
+          showSuccessToast("Purchases restored successfully");
       } catch (e) {
-          alert("Restore failed.");
+          showErrorToast("Restore failed", "Please try again later.");
+          console.error('[ManifestContext] restorePurchases error:', e);
       }
   };
 
   const logout = async () => {
-      if (authUser) {
-          await auth.signOut();
+      try {
+        if (authUser) {
+            await auth.signOut();
+        }
+      } catch (e) {
+        console.error('[ManifestContext] Sign out error:', e);
       }
       
-      // Reset all states
+      // Reset all states regardless
       setIsGuestMode(false);
       setUser(DEFAULT_USER_PROFILE);
       setGoals([]);
